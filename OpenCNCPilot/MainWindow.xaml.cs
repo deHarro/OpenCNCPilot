@@ -37,10 +37,33 @@ namespace OpenCNCPilot
 			PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
 		}
 
+		// private variable on class level
+		private OpenCNCPilot.Communication.JoystickService _joystick;
+
 		public MainWindow()
 		{
 			AppDomain.CurrentDomain.UnhandledException += UnhandledException;
 			InitializeComponent();
+
+			// global variable for JoystickService, deHarry, 2026-02-06
+			_joystick = new OpenCNCPilot.Communication.JoystickService(
+				Properties.Settings.Default.JoystickPort,
+				Properties.Settings.Default.JoystickBaudrate,
+				machine
+			);
+
+			// automatically  open/close joystick port, deHarry, 2026-02-06
+			machine.ConnectionStateChanged += () =>
+			{
+				if (machine.Connected)
+				{
+					_joystick.Open();
+				}
+				else
+				{
+					_joystick.Close();
+				}
+			};
 
 			openFileDialogGCode.FileOk += OpenFileDialogGCode_FileOk;
 			saveFileDialogGCode.FileOk += SaveFileDialogGCode_FileOk;

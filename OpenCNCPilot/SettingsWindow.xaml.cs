@@ -20,49 +20,57 @@ namespace OpenCNCPilot
 
 			InitializeComponent();
 
-			ComboBoxSerialPort_DropDownOpened(null, null);
+			ComboBoxSerialPort_DropDownOpened(ComboBoxSerialPort, null);
+            ComboBoxSerialPort_DropDownOpened(ComboBoxJoystickPort, null);
 
-			comboBoxConnectionType.ItemsSource = Enum.GetValues(typeof(ConnectionType)).Cast<ConnectionType>();
+            comboBoxConnectionType.ItemsSource = Enum.GetValues(typeof(ConnectionType)).Cast<ConnectionType>();
 		}
 
-		private void ComboBoxSerialPort_DropDownOpened(object sender, EventArgs e)
-		{
-			ComboBoxSerialPort.Items.Clear();
+        private void ComboBoxSerialPort_DropDownOpened(object sender, EventArgs e)
+        {
+            // Falls die Methode beim Start manuell gerufen wird (sender == null), 
+            // nehmen wir standardmäßig die GRBL-Box.
+            ComboBox targetBox = (sender as ComboBox) ?? ComboBoxSerialPort;
 
-			Dictionary<string, string> ports = new Dictionary<string, string>();
+            targetBox.Items.Clear();
 
-			try
-			{
-				ManagementObjectSearcher searcher = new ManagementObjectSearcher("root\\CIMV2", "SELECT * FROM Win32_SerialPort");
-				foreach (ManagementObject queryObj in searcher.Get())
-				{
-					string id = queryObj["DeviceID"] as string;
-					string name = queryObj["Name"] as string;
+            Dictionary<string, string> ports = new Dictionary<string, string>();
 
-					ports.Add(id, name);
-				}
-			}
-			catch (ManagementException ex)
-			{
-				MessageBox.Show("An error occurred while querying for WMI data: " + ex.Message);
-			}
+            try
+            {
+                ManagementObjectSearcher searcher = new ManagementObjectSearcher("root\\CIMV2", "SELECT * FROM Win32_SerialPort");
+                foreach (ManagementObject queryObj in searcher.Get())
+                {
+                    string id = queryObj["DeviceID"] as string;
+                    string name = queryObj["Name"] as string;
 
-			// fix error of some boards not being listed properly
-			foreach (string port in SerialPort.GetPortNames())
-			{
-				if (!ports.ContainsKey(port))
-				{
-					ports.Add(port, port);
-				}
-			}
+                    if (id != null && name != null && !ports.ContainsKey(id))
+                        ports.Add(id, name);
+                }
+            }
+            catch (ManagementException ex)
+            {
+                // Nur anzeigen, wenn wirklich ein Fehler passiert
+                Console.WriteLine("WMI Error: " + ex.Message);
+            }
 
-			foreach (var port in ports)
-			{
-				ComboBoxSerialPort.Items.Add(new ComboBoxItem() { Content = port.Value, Tag = port.Key });
-			}
-		}
+            // Fallback für Boards, die nicht via WMI gelistet werden
+            foreach (string port in SerialPort.GetPortNames())
+            {
+                if (!ports.ContainsKey(port))
+                {
+                    ports.Add(port, port);
+                }
+            }
 
-		private void Window_Closed(object sender, EventArgs e)
+            foreach (var port in ports)
+            {
+                // Wir fügen ComboBoxItems hinzu. 
+                // Wichtig: Content ist der Name, Tag ist die ID (z.B. "COM3")
+                targetBox.Items.Add(new ComboBoxItem() { Content = port.Value, Tag = port.Key });
+            }
+        }
+        private void Window_Closed(object sender, EventArgs e)
 		{
 			Properties.Settings.Default.Save();
 		}

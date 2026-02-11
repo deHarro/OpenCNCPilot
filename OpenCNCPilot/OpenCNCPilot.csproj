@@ -83,6 +83,7 @@
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </ApplicationDefinition>
+    <Compile Include="Communication\JoystickService.cs" />
     <Compile Include="Communication\Machine.cs" />
     <Compile Include="EditMacroItemWindow.xaml.cs">
       <DependentUpon>EditMacroItemWindow.xaml</DependentUpon>

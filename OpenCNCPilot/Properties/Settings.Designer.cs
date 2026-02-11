@@ -12,7 +12,7 @@ namespace OpenCNCPilot.Properties {
     
     
     [global::System.Runtime.CompilerServices.CompilerGeneratedAttribute()]
-    [global::System.CodeDom.Compiler.GeneratedCodeAttribute("Microsoft.VisualStudio.Editors.SettingsDesigner.SettingsSingleFileGenerator", "15.9.0.0")]
+    [global::System.CodeDom.Compiler.GeneratedCodeAttribute("Microsoft.VisualStudio.Editors.SettingsDesigner.SettingsSingleFileGenerator", "16.10.0.0")]
     internal sealed partial class Settings : global::System.Configuration.ApplicationSettingsBase {
         
         private static Settings defaultInstance = ((Settings)(global::System.Configuration.ApplicationSettingsBase.Synchronized(new Settings())));
@@ -349,7 +349,7 @@ namespace OpenCNCPilot.Properties {
         
         [global::System.Configuration.UserScopedSettingAttribute()]
         [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
-        [global::System.Configuration.DefaultSettingValueAttribute("10")]
+        [global::System.Configuration.DefaultSettingValueAttribute("30")]
         public double ConsoleFadeTime {
             get {
                 return ((double)(this["ConsoleFadeTime"]));
@@ -728,6 +728,30 @@ namespace OpenCNCPilot.Properties {
             }
             set {
                 this["ShowViewCube"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("COM4")]
+        public string JoystickPort {
+            get {
+                return ((string)(this["JoystickPort"]));
+            }
+            set {
+                this["JoystickPort"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("115200")]
+        public int JoystickBaudrate {
+            get {
+                return ((int)(this["JoystickBaudrate"]));
+            }
+            set {
+                this["JoystickBaudrate"] = value;
             }
         }
     }
