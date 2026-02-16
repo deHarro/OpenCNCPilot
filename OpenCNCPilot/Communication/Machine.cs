@@ -1108,16 +1108,6 @@ namespace OpenCNCPilot.Communication
 						if (m.Groups[1].Value == "WPos")
 							NewMachinePosition += WorkOffset;
 
-                        // --- JOYSTICK SILENT MODE FILTER START --- deHarry, 2026-02-05
-                        // If Shift or Alt is held, we ignore the position update from GRBL.
-                        // This keeps the OCP UI and 3D view at the old coordinates 
-                        // while the machine phisically moves (Scenario 3).
-                        if (Keyboard.IsKeyDown(Key.LeftShift) || Keyboard.IsKeyDown(Key.LeftAlt))
-                        {
-                            continue; // Skip the update of MachinePosition
-                        }
-                        // --- JOYSTICK SILENT MODE FILTER END ---
-
 						if (NewMachinePosition != MachinePosition)
 						{
 							posUpdate = true;

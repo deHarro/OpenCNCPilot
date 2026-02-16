@@ -1,8 +1,45 @@
-﻿using System;
+﻿/* 
+    Adapter für einen Joystick mit zwei Daumenjoysticks, deHarry, 2026-02-11
+    
+    Der Joystick wird über einen Arduino Nano betrieben, der die RAW-Werte der Sticks
+    etwas glättet und auf die MItte zentriert, dann über die serielle Schnittstelle an 
+    OpenCNCPilot (OCP) sendet.
+
+    OCP hat eine neue Klasse JoystickService erhalten, die sowohl die Kommunikation zum 
+    Joystick abwickelt, als auch die Berechnung für die Jog-Commands Richtung GRBL erledigt.
+
+    Größte Herausforderung bei dem Projekt war die korrekte Behandlung der verschiedenen
+    involvierten Buffer zwischen Joystick, OCP und GRBL.
+
+    Der programmtechnische Anschluss an OCP erfolgt über die Klasse Machine.
+    Hier wurden zwei RaiseEvent eingebaut, damit JoystickService mitbekommt, wenn GRBL
+    "ok" oder "error" antwortet.
+
+    In MainWindow.Xaml.cs wurden ebenfalls ein paar Zeilen Code eingebaut. Zum einen eine 
+    private Variable auf Klassenebene "_joystick", die dazu verwendet wird, einen zweiten 
+    Kommunikationsanschluss für den Joystick zu bedienen. Zum anderen die Routinen um diesen
+    Port über die GUI öffnen und schließen zu können.
+
+    Im Settings Dialog wurden die Auswahlboxen für den Port und die Baudrate eingebaut, die 
+    Werte werden in den Settings gespeichert.
+
+    Ohne brachiale Unterstützung durch Gemini hätte ich keine Chance gehabt, das Projekt 
+    umzusetzen, da ich in Sachen C# vollkommen unbeleckt bin, umgekehrt hatte Gemini keine 
+    Chance, ohne meine geduldigen Erklärungen, wie etwas Bestimmtes in OCP gelöst ist, und 
+    meine Anleitung auf einen grünen Zweig zu kommen. Teamwork at it's best ;)
+
+    Die ausgefuchste Logik im "alten" Joystick Code ist ziemlich hinfällig geworden, die 
+    komplette Mathematik wird jetzt in OCP erledigt, der Joystick Arduino liefert nur noch 
+    die reinen Poti-Werte der drei Daumen-Joysticks über die Schnittstelle.
+
+*/
+
+using System;
 using System.IO.Ports;
 using System.Timers;
 using System.Linq;
 using System.Globalization;
+using System.Windows.Input;
 
 namespace OpenCNCPilot.Communication
 {
@@ -15,18 +52,19 @@ namespace OpenCNCPilot.Communication
         private double _joyX, _joyY, _joyZ;
         private bool _isJogging = false;
 
-        // --- KONFIGURATION (Hardcoded wie besprochen) ---
-        private const double MAX_FEED_X = 2000.0;
-        private const double MAX_FEED_Y = 2000.0;
-        private const double MAX_FEED_Z = 600.0;
-        private const int TIMER_INTERVAL_MS = 50;
-        private const double JOG_BUFFER_MULT = 3.0; // Faktor für flüssige Pufferfüllung
+        // --- KONFIGURATION (erst mal Hardcoded) ---
+       private double MAX_FEED_X = 2000.0;
+       private double MAX_FEED_Y = 2000.0;
+       private double MAX_FEED_Z = 600.0;
+
+        private const int TIMER_INTERVAL_MS = 50;           // Zeitraster für die Jog-Befehle Richtung GRBL
 
         public JoystickService(string portName, int baudRate, Machine machine)
         {
             _machine = machine;
             _serialPort = new SerialPort(portName, baudRate);
             _serialPort.DataReceived += OnDataReceived;
+            //_machine.Connection.LineReceived += Connection_LineReceived;
 
             _jogTimer = new Timer(TIMER_INTERVAL_MS);
             _jogTimer.Elapsed += OnJogTimerTick;
@@ -64,6 +102,7 @@ namespace OpenCNCPilot.Communication
                 while (_serialPort.BytesToRead > 0)
                 {
                     string line = _serialPort.ReadLine();
+                    Console.WriteLine($"Empfang: {line}");
                     ParseInput(line);
                 }
             }
@@ -72,67 +111,82 @@ namespace OpenCNCPilot.Communication
 
         private void ParseInput(string data)
         {
-            var parts = data.Trim().Split(':');
-            if (parts.Length < 3 || parts[0] != "J") return;
-
-            for (int i = 1; i < parts.Length; i += 2)
+            // Wir schieben die komplette Verarbeitung in den UI-Thread
+            System.Windows.Application.Current.Dispatcher.BeginInvoke(new Action(() =>
             {
-                if (i + 1 >= parts.Length) break;
+                try
+                {
+                    var parts = data.Trim().Split(':');
+                    if (parts.Length < 3 || parts[0] != "J") return;
 
-                string axis = parts[i].ToUpper();
-                if (!int.TryParse(parts[i + 1], out int rawValue)) continue;
+                    for (int i = 1; i < parts.Length; i += 2)
+                    {
+                        if (i + 1 >= parts.Length) break;
 
-                // Normalisierung 0-1023 auf -1.0 bis 1.0 (Zentrum 512)
-                double norm = (rawValue - 512) / 512.0;
-                if (Math.Abs(norm) < 0.07) norm = 0; // Deadzone
+                        string axis = parts[i].ToUpper();
+                        if (!int.TryParse(parts[i + 1], out int rawValue)) continue;
 
-                if (axis == "X") _joyX = norm;
-                if (axis == "Y") _joyY = norm;
-                if (axis == "Z") _joyZ = norm;
-            }
+                        double norm = (rawValue - 512) / 512.0;
+                        if (Math.Abs(norm) < 0.07) norm = 0;
 
-            // Timer starten, wenn Bewegung erkannt wird
-            if (!_jogTimer.Enabled && (_joyX != 0 || _joyY != 0 || _joyZ != 0))
-            {
-                _jogTimer.Start();
-            }
+                        if (axis == "X") _joyX = norm;
+                        if (axis == "Y") _joyY = norm;
+                        if (axis == "Z") _joyZ = norm;
+                    }
+
+                    if (!_jogTimer.Enabled && (_joyX != 0 || _joyY != 0 || _joyZ != 0))
+                    {
+                        _jogTimer.Start();
+                    }
+                }
+                catch (Exception ex)
+                {
+                    // Hier könnten wir einen Haltepunkt setzen, falls es trotzdem kracht
+                    Console.WriteLine("Fehler beim Parsen: " + ex.Message);
+                }
+            }));
         }
 
         private void OnJogTimerTick(object sender, ElapsedEventArgs e)
         {
-            if (_joyX == 0 && _joyY == 0 && _joyZ == 0)
+            // Wir schieben die gesamte Logik des Ticks in den UI-Thread
+            System.Windows.Application.Current.Dispatcher.BeginInvoke(new Action(() =>
             {
-                if (_isJogging) StopJogging();
-                return;
-            }
+                try
+                {
+                    if (_machine.BufferState > 20) return;
 
-            if (_machine.BufferState > 30) return;
-            
-            _isJogging = true;
+                    if (_joyX == 0 && _joyY == 0 && _joyZ == 0)
+                    {
+                        if (_isJogging) StopJogging();
+                        return;
+                    }
 
-            // Wir berechnen die Feedrate (mm/min)
-            double currentFeed = Math.Max(Math.Abs(_joyX) * MAX_FEED_X,
-                                 Math.Max(Math.Abs(_joyY) * MAX_FEED_Y,
-                                          Math.Abs(_joyZ) * MAX_FEED_Z));
+                    _isJogging = true;
 
-            // Zeitfenster: 0.1 Sekunden (100ms) Weg vorausplanen
-            // Nur ein winziges Häppchen Weg für 40ms senden
-            double dt = 0.04 / 60.0;
+                    double dt = 0.03 / 60.0;
+                    double dx = _joyX * MAX_FEED_X * dt;
+                    double dy = _joyY * MAX_FEED_Y * dt;
+                    double dz = _joyZ * MAX_FEED_Z * dt;
+                    double feed = Math.Max(Math.Abs(_joyX) * MAX_FEED_X,
+                                  Math.Max(Math.Abs(_joyY) * MAX_FEED_Y,
+                                           Math.Abs(_joyZ) * MAX_FEED_Z));
 
-            double dx = _joyX * MAX_FEED_X * dt;
-            double dy = _joyY * MAX_FEED_Y * dt;
-            double dz = _joyZ * MAX_FEED_Z * dt;
-
-            // Nur senden, wenn die Bewegung groß genug ist (Präzision)
-            if (Math.Abs(dx) > 0.001 || Math.Abs(dy) > 0.001 || Math.Abs(dz) > 0.001)
-            {
-                string cmd = string.Format(CultureInfo.InvariantCulture,
-                    "$J=G91 G21 X{0:F3} Y{1:F3} Z{2:F3} F{3:F0}",
-                    dx, dy, dz, currentFeed);
-
-                _machine.SendLine(cmd);
-            }
+                    if (Math.Abs(dx) > 0.001 || Math.Abs(dy) > 0.001 || Math.Abs(dz) > 0.001)
+                    {
+                        // Dieser Aufruf ist jetzt sicher, da wir im UI-Thread sind
+                        _machine.SendLine(string.Format(CultureInfo.InvariantCulture,
+                            "$J=G91 G21 X{0:F3} Y{1:F3} Z{2:F3} F{3:F0}", dx, dy, dz, feed));
+                    }
+                }
+                catch (Exception ex)
+                {
+                    // Wenn es JETZT kracht, fangen wir es hier
+                    System.Diagnostics.Debug.WriteLine("Fehler im Timer-Tick: " + ex.Message);
+                }
+            }));
         }
+        
 
         private async void StopJogging()
         {
