@@ -28,7 +28,8 @@ namespace OpenCNCPilot
 
         private void ComboBoxSerialPort_DropDownOpened(object sender, EventArgs e)
         {
-            // Falls die Methode beim Start manuell gerufen wird (sender == null), 
+            // Hier musste ich ziemlich umbauen, um den zweiten COM-Port einzubauen,  <deHarry, 2026-02-16>
+            // Falls die Methode beim Start manuell gerufen wird (sender == null),  <deHarry, 2026-02-06>
             // nehmen wir standardm‰ﬂig die GRBL-Box.
             ComboBox targetBox = (sender as ComboBox) ?? ComboBoxSerialPort;
 
