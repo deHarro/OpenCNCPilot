@@ -432,7 +432,7 @@ namespace OpenCNCPilot.Communication
 							{
 								string errorline = (string)Sent.Dequeue();
 
-								RaiseEvent(ReportError, $"{line}: {errorline}"); // <--- Signal für den Joystick, deHarry, 2026-02-06
+								RaiseEvent(ReportError, $"{line}: {errorline}");
 
 								BufferState -= errorline.Length + 1;
 							}
