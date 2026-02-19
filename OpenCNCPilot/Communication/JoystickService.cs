@@ -1,8 +1,9 @@
 ﻿/* 
     Adapter für einen Joystick mit zwei Daumenjoysticks, deHarry, 2026-02-11
+    Einzelheiten zum Joystick siehe www.harald-sattler.de/html/joystick-steuerung.htm
     
     Der Joystick wird über einen Arduino Nano betrieben, der die RAW-Werte der Sticks
-    etwas glättet und auf die MItte zentriert, dann über die serielle Schnittstelle an 
+    etwas glättet und auf die Mitte zentriert, dann über die serielle Schnittstelle an 
     OpenCNCPilot (OCP) sendet.
 
     OCP hat eine neue Klasse JoystickService erhalten, die sowohl die Kommunikation zum 
@@ -12,13 +13,13 @@
     involvierten Buffer zwischen Joystick, OCP und GRBL.
 
     Der programmtechnische Anschluss an OCP erfolgt über die Klasse Machine.
-    Hier wurden zwei RaiseEvent eingebaut, damit JoystickService mitbekommt, wenn GRBL
+    Hier wurde ein RaiseEvent eingebaut, damit JoystickService mitbekommt, wenn GRBL mit
     "ok" oder "error" antwortet.
 
     In MainWindow.Xaml.cs wurden ebenfalls ein paar Zeilen Code eingebaut. Zum einen eine 
     private Variable auf Klassenebene "_joystick", die dazu verwendet wird, einen zweiten 
     Kommunikationsanschluss für den Joystick zu bedienen. Zum anderen die Routinen um diesen
-    Port über die GUI öffnen und schließen zu können.
+    Port über die GUI parametrieren, öffnen und schließen zu können.
 
     Im Settings Dialog wurden die Auswahlboxen für den Port und die Baudrate eingebaut, die 
     Werte werden in den Settings gespeichert.
@@ -30,23 +31,23 @@
 
     Die ausgefuchste Logik im "alten" Joystick Code ist ziemlich hinfällig geworden, die 
     komplette Mathematik wird jetzt in OCP erledigt, der Joystick Arduino liefert nur noch 
-    die reinen Poti-Werte der drei Daumen-Joysticks über die Schnittstelle.
+    die geglätteten Poti-Werte der drei Daumen-Joysticks über die Schnittstelle.
 
 */
 
 using System;
+using System.Globalization;
 using System.IO.Ports;
 using System.Timers;
-using System.Linq;
-using System.Globalization;
-using System.Windows.Input;
+
 
 namespace OpenCNCPilot.Communication
 {
     internal class JoystickService
     {
-        private SerialPort _serialPort;
         private Machine _machine;
+        private SerialPort _serialPort;
+        private OpenCNCPilot.MainWindow _parent;
         private Timer _jogTimer;
 
         private double _joyX, _joyY, _joyZ;
@@ -59,9 +60,11 @@ namespace OpenCNCPilot.Communication
 
         private const int TIMER_INTERVAL_MS = 50;           // Zeitraster für die Jog-Befehle Richtung GRBL
 
-        public JoystickService(string portName, int baudRate, Machine machine)
+        public JoystickService(string portName, int baudRate, Machine machine, OpenCNCPilot.MainWindow parent)
         {
             _machine = machine;
+            _parent = parent; // Zuweisung
+
             _serialPort = new SerialPort(portName, baudRate);
             _serialPort.DataReceived += OnDataReceived;
             //_machine.Connection.LineReceived += Connection_LineReceived;
@@ -149,9 +152,22 @@ namespace OpenCNCPilot.Communication
 
         private void OnJogTimerTick(object sender, ElapsedEventArgs e)
         {
-            // Wir schieben die gesamte Logik des Ticks in den UI-Thread
             System.Windows.Application.Current.Dispatcher.BeginInvoke(new Action(() =>
             {
+                // Nur wenn "Enable Keyboard Jogging" aktiv ist, darf der Joystick senden
+                if (_parent == null || !_parent.IsJoggingAllowed)
+                {
+                    if (_isJogging) StopJogging();
+                    return;
+                }
+
+                // Modus-Check Manual Mode?
+                if (_machine.Mode != Machine.OperatingMode.Manual)
+                {
+                    if (_isJogging) StopJogging();
+                    return;
+                }
+
                 try
                 {
                     if (_machine.BufferState > 20) return;

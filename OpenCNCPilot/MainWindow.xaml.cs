@@ -49,7 +49,7 @@ namespace OpenCNCPilot
 			_joystick = new OpenCNCPilot.Communication.JoystickService(
 				Properties.Settings.Default.JoystickPort,
 				Properties.Settings.Default.JoystickBaudrate,
-				machine
+				machine, this
 			);
 
 			// automatically  open/close joystick port, <deHarry, 2026-02-06>
@@ -206,6 +206,15 @@ namespace OpenCNCPilot
 					return $"OpenCNCPilot v{Version} by martin2250";
 				else
 					return $"OpenCNCPilot v{Version} by martin2250 - {CurrentFileName}";
+			}
+		}
+
+		public bool IsJoggingAllowed				// deHarry, 2026-02-19
+		{
+			get
+			{
+				// Wir kombinieren: Checkbox an UND Fokus in der TextBox
+				return CheckBoxEnableJog.IsChecked == true && TextBoxJog.IsKeyboardFocused;
 			}
 		}
 
