@@ -1,4 +1,4 @@
-<Window x:Class="OpenCNCPilot.SettingsWindow"
+﻿<Window x:Class="OpenCNCPilot.SettingsWindow"
 		xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
 		xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
 		xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
@@ -140,6 +140,65 @@
                 <CheckBox Content="Keep Dwell 'G4' Commands" HorizontalAlignment="Left" Margin="116,30,0,0" VerticalAlignment="Top" IsChecked="{util:SettingBinding GCodeIncludeDwell}" ToolTip="Strip G4 P[XX] from file before sending to machine if not checked"/>
                 <CheckBox Content="Keep Program End (M2, M30)" HorizontalAlignment="Left" Margin="116,50,0,0" VerticalAlignment="Top" IsChecked="{util:SettingBinding GCodeIncludeMEnd}" ToolTip="Strip M2/M30 from file before sending to machine if not checked. Default is off since these commands reset offsets from G92."/>
             </Grid>
+        </TabItem>
+        <TabItem Header="Joystick">
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <StackPanel Margin="10">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="120"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+
+                        <TextBox Grid.Row="0" Grid.Column="0" Height="23" Margin="0,5" 
+             VerticalAlignment="Top" HorizontalContentAlignment="Right"
+             Text="{util:SettingBinding JoystickDt}"/>
+                        <StackPanel Grid.Row="0" Grid.Column="1" Margin="10,5,0,15">
+                            <TextBlock Text="Timing (dt)" FontWeight="Bold" />
+                            <TextBlock Text="Zeitfenster für GRBL-Befehle (Sekunden). Höhere Werte (z.B. 0.15) machen den Lauf weicher, erhöhen aber den Nachlauf beim Loslassen." 
+                   TextWrapping="Wrap" Foreground="Gray" FontSize="11"/>
+                        </StackPanel>
+
+                        <TextBlock Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2" 
+               Text="Die Werte für Max Feed der einzelnen Achsen müssen mit den entsprechenden Angaben in GRBL übereinstimmen." 
+               FontWeight="SemiBold" Foreground="#FF4444" Margin="0,5,0,5" TextWrapping="Wrap"/>
+
+                        <TextBox Grid.Row="2" Grid.Column="0" Height="23" Margin="0,5" 
+             VerticalAlignment="Top" HorizontalContentAlignment="Right"
+             Text="{util:SettingBinding JoystickMaxFeedX}"/>
+                        <StackPanel Grid.Row="2" Grid.Column="1" Margin="10,5,0,15">
+                            <TextBlock Text="Max Feed X (mm/min)" FontWeight="Bold" />
+                            <TextBlock Text="Maximale Geschwindigkeit für die X-Achse während des Joggens." 
+                   TextWrapping="Wrap" Foreground="Gray" FontSize="11"/>
+                        </StackPanel>
+
+                        <TextBox Grid.Row="3" Grid.Column="0" Height="23" Margin="0,5" 
+             VerticalAlignment="Top" HorizontalContentAlignment="Right"
+             Text="{util:SettingBinding JoystickMaxFeedY}"/>
+                        <StackPanel Grid.Row="3" Grid.Column="1" Margin="10,5,0,15">
+                            <TextBlock Text="Max Feed Y (mm/min)" FontWeight="Bold" />
+                            <TextBlock Text="Maximale Geschwindigkeit für die Y-Achse während des Joggens." 
+                   TextWrapping="Wrap" Foreground="Gray" FontSize="11"/>
+                        </StackPanel>
+
+                        <TextBox Grid.Row="4" Grid.Column="0" Height="23" Margin="0,5" 
+             VerticalAlignment="Top" HorizontalContentAlignment="Right"
+             Text="{util:SettingBinding JoystickMaxFeedZ}"/>
+                        <StackPanel Grid.Row="4" Grid.Column="1" Margin="10,5,0,10">
+                            <TextBlock Text="Max Feed Z (mm/min)" FontWeight="Bold" />
+                            <TextBlock Text="Maximale Geschwindigkeit für die Z-Achse." 
+                   TextWrapping="Wrap" Foreground="Gray" FontSize="11"/>
+                        </StackPanel>
+                    </Grid>
+                </StackPanel>
+            </ScrollViewer>
         </TabItem>
     </TabControl>
 </Window>

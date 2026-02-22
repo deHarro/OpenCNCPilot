@@ -33,6 +33,9 @@
     komplette Mathematik wird jetzt in OCP erledigt, der Joystick Arduino liefert nur noch 
     die geglätteten Poti-Werte der drei Daumen-Joysticks über die Schnittstelle.
 
+    Die Laufrichtungen der Y- und Z-Achse waren gegenüber vorher vertauscht -> fixed
+    Die Stepper "jammern" beim Verfahren, weil die Inkremente zu klein eingestellt waren -> fixed
+
 */
 
 using System;
@@ -52,11 +55,6 @@ namespace OpenCNCPilot.Communication
 
         private double _joyX, _joyY, _joyZ;
         private bool _isJogging = false;
-
-        // --- KONFIGURATION (erst mal Hardcoded) ---
-       private double MAX_FEED_X = 2000.0;
-       private double MAX_FEED_Y = 2000.0;
-       private double MAX_FEED_Z = 600.0;
 
         private const int TIMER_INTERVAL_MS = 50;           // Zeitraster für die Jog-Befehle Richtung GRBL
 
@@ -109,7 +107,14 @@ namespace OpenCNCPilot.Communication
                     ParseInput(line);
                 }
             }
-            catch { /* Übertragungsfehler ignorieren */ }
+            catch (System.IO.IOException)
+            {
+                // Port wurde geschlossen, während wir lesen wollten - völlig okay, einfach ignorieren
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine("Joystick Read Error: " + ex.Message);
+            }
         }
 
         private void ParseInput(string data)
@@ -180,13 +185,20 @@ namespace OpenCNCPilot.Communication
 
                     _isJogging = true;
 
-                    double dt = 0.03 / 60.0;
-                    double dx = _joyX * MAX_FEED_X * dt;
-                    double dy = _joyY * MAX_FEED_Y * dt;
-                    double dz = _joyZ * MAX_FEED_Z * dt;
-                    double feed = Math.Max(Math.Abs(_joyX) * MAX_FEED_X,
-                                  Math.Max(Math.Abs(_joyY) * MAX_FEED_Y,
-                                           Math.Abs(_joyZ) * MAX_FEED_Z));
+                    // Wir holen die Werte direkt aus den App-Settings
+                    double dt = Properties.Settings.Default.JoystickDt / 60.0;
+                    double maxFX = Properties.Settings.Default.JoystickMaxFeedX;
+                    double maxFY = Properties.Settings.Default.JoystickMaxFeedY;
+                    double maxFZ = Properties.Settings.Default.JoystickMaxFeedZ;
+                    
+                    //double dt = 0.03 / 60.0;                                    // mit diesen Werten jammern die Stepper
+                    double dx = _joyX           * maxFX * dt;
+                    double dy = (_joyY * -1.0)  * maxFY * dt;               // Laufrichtung umkehren (ist dann wie vorher)
+                    double dz = (_joyZ * -1.0)  * maxFZ * dt;               // Laufrichtung umkehren (ist dann wie vorher)
+
+                    double feed = Math.Max(Math.Abs(_joyX) * maxFX,
+                                  Math.Max(Math.Abs(_joyY) * maxFY,
+                                           Math.Abs(_joyZ) * maxFZ));
 
                     if (Math.Abs(dx) > 0.001 || Math.Abs(dy) > 0.001 || Math.Abs(dz) > 0.001)
                     {
@@ -194,6 +206,15 @@ namespace OpenCNCPilot.Communication
                         _machine.SendLine(string.Format(CultureInfo.InvariantCulture,
                             "$J=G91 G21 X{0:F3} Y{1:F3} Z{2:F3} F{3:F0}", dx, dy, dz, feed));
                     }
+                    else if (_isJogging)
+                    {
+                        // Wenn die Bewegung zu klein ist UND wir vorher gejoggt sind -> STOPP!
+                        StopJogging();
+                    }
+                }
+                catch (System.IO.IOException)
+                {
+                    // Auch hier: Port-Schließung im laufenden Betrieb abfangen
                 }
                 catch (Exception ex)
                 {

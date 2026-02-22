@@ -186,5 +186,17 @@ G92Z0;</Value>
     <Setting Name="JoystickBaudrate" Type="System.Int32" Scope="User">
       <Value Profile="(Default)">115200</Value>
     </Setting>
+    <Setting Name="JoystickDt" Type="System.Double" Scope="User">
+      <Value Profile="(Default)">0.1</Value>
+    </Setting>
+    <Setting Name="JoystickMaxFeedX" Type="System.Double" Scope="User">
+      <Value Profile="(Default)">2000</Value>
+    </Setting>
+    <Setting Name="JoystickMaxFeedY" Type="System.Double" Scope="User">
+      <Value Profile="(Default)">2000</Value>
+    </Setting>
+    <Setting Name="JoystickMaxFeedZ" Type="System.Double" Scope="User">
+      <Value Profile="(Default)">600</Value>
+    </Setting>
   </Settings>
 </SettingsFile>

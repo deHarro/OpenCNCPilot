@@ -754,5 +754,53 @@ namespace OpenCNCPilot.Properties {
                 this["JoystickBaudrate"] = value;
             }
         }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("0.1")]
+        public double JoystickDt {
+            get {
+                return ((double)(this["JoystickDt"]));
+            }
+            set {
+                this["JoystickDt"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("2000")]
+        public double JoystickMaxFeedX {
+            get {
+                return ((double)(this["JoystickMaxFeedX"]));
+            }
+            set {
+                this["JoystickMaxFeedX"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("2000")]
+        public double JoystickMaxFeedY {
+            get {
+                return ((double)(this["JoystickMaxFeedY"]));
+            }
+            set {
+                this["JoystickMaxFeedY"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("600")]
+        public double JoystickMaxFeedZ {
+            get {
+                return ((double)(this["JoystickMaxFeedZ"]));
+            }
+            set {
+                this["JoystickMaxFeedZ"] = value;
+            }
+        }
     }
 }

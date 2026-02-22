@@ -306,8 +306,7 @@
 								<Hyperlink RequestNavigate="Hyperlink_RequestNavigate" NavigateUri="https://github.com/martin2250/OpenCNCPilot">Project Page</Hyperlink>
 								<Hyperlink RequestNavigate="Hyperlink_RequestNavigate" NavigateUri="https://github.com/martin2250/OpenCNCPilot/issues">Help</Hyperlink>
                             </TextBlock>
-                            <TextBlock Text="{Binding Version}" FontSize="16" Padding="5" FontWeight="Bold"/>      
-                            <TextBlock Text="Mod: Joystick Jogging v1.0, deHarro - 2026-02-20" Foreground="Gray" FontSize="10" Margin="5,5,0,5" />
+                            <TextBlock Text="Mod: Joystick Jogging v1.1, deHarro - 2026-02-22" Foreground="Gray" FontSize="10" Margin="5,5,0,5" />
                         </StackPanel>
                     </Expander>
                 </Border>
