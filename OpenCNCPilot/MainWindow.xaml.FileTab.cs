@@ -2,11 +2,18 @@
 using OpenCNCPilot.GCode;
 using System;
 using System.Windows;
+using System.Collections.Generic;
+using System.Linq;
+using Microsoft.Win32;
+using System.IO;
+using System.Text;
+using OpenCNCPilot.Properties;
 
 namespace OpenCNCPilot
 {
 	partial class MainWindow
 	{
+		
 		private string _currentFileName = "";
 
 		public string CurrentFileName
@@ -19,29 +26,110 @@ namespace OpenCNCPilot
 			}
 		}
 
+		private void ButtonAddLayer_Click(object sender, RoutedEventArgs e)
+		{
+			if (machine.Mode == Machine.OperatingMode.SendFile) return;
+
+			// Wir erstellen den Dialog jedes Mal komplett NEU, 
+			// um sicherzugehen, dass keine alten Daten drin hängen!
+			OpenFileDialog localDialog = new OpenFileDialog() { Filter = "G-Code files (*.nc;*.gcode)|*.nc;*.gcode|All files (*.*)|*.*" };
+
+			if (localDialog.ShowDialog() == true)
+			{
+				try
+				{
+					// 1. Daten in VÖLLIG NEUE lokale Variablen laden
+					string pfad = localDialog.FileName;
+					string dateiName = System.IO.Path.GetFileName(pfad);
+					string[] inhalt = System.IO.File.ReadAllLines(pfad);
+
+					// 2. Ein NEUES GCodeLayer Objekt erzeugen
+					GCodeLayer layer = new GCodeLayer();
+
+					// 3. Wichtig: Wir erzwingen eine echte Kopie des Strings
+					layer.Name = new string(dateiName.ToCharArray());
+					layer.Filename = pfad;
+					layer.Content = inhalt;
+					layer.IsActive = true;
+
+					// 4. In die Liste werfen
+					AllLayers.Add(layer);
+
+					// 5. Anzeige aktualisieren
+					UpdateLayerDisplay();
+					LayerCheckBox_Click(null, null);
+
+					System.Diagnostics.Debug.WriteLine("Hinzugefügt: " + layer.Name);
+				}
+				catch (Exception ex)
+				{
+					MessageBox.Show("Fehler: " + ex.Message);
+				}
+			}
+		}
+
 		private void OpenFileDialogGCode_FileOk(object sender, System.ComponentModel.CancelEventArgs e)
 		{
 			if (machine.Mode == Machine.OperatingMode.SendFile)
 				return;
 
-			CurrentFileName = "";
-			ToolPath = GCodeFile.Empty;
-
 			openFileDialogGCode.InitialDirectory = System.IO.Path.GetDirectoryName(openFileDialogGCode.FileName);
 
 			try
 			{
-				machine.SetFile(System.IO.File.ReadAllLines(openFileDialogGCode.FileName));
+				string[] newLines = System.IO.File.ReadAllLines(openFileDialogGCode.FileName);
+
+				// 1. Liste leeren für Neustart
+				AllLayers.Clear();
+
+				// 2. Fehler CS1503 (Zeile 79) lösen: Paket erstellen
+				AllLayers.Add(new GCodeLayer
+				{
+					Name = System.IO.Path.GetFileName(openFileDialogGCode.FileName),
+                    Filename = openFileDialogGCode.FileName,
+                    Content = newLines,
+					IsActive = true
+				});
+
+				// 3. UI updaten
+				UpdateLayerDisplay();
+
+				// 4. Fehler CS1503 (Zeile 85) lösen: Wir rufen einfach unsere neue Sammel-Logik auf
+				LayerCheckBox_Click(null, null);
+
 				CurrentFileName = System.IO.Path.GetFileName(openFileDialogGCode.FileName);
 			}
 			catch (Exception ex)
 			{
-				MessageBox.Show(ex.Message);
+				MessageBox.Show("Fehler beim Öffnen: " + ex.Message);
 			}
 
 			HeightMapApplied = false;
 		}
 
+		/*		private void OpenFileDialogGCode_FileOk(object sender, System.ComponentModel.CancelEventArgs e)
+				{
+					if (machine.Mode == Machine.OperatingMode.SendFile)
+						return;
+
+					CurrentFileName = "";
+					ToolPath = GCodeFile.Empty;
+
+					openFileDialogGCode.InitialDirectory = System.IO.Path.GetDirectoryName(openFileDialogGCode.FileName);
+
+					try
+					{
+						machine.SetFile(System.IO.File.ReadAllLines(openFileDialogGCode.FileName));
+						CurrentFileName = System.IO.Path.GetFileName(openFileDialogGCode.FileName);
+					}
+					catch (Exception ex)
+					{
+						MessageBox.Show(ex.Message);
+					}
+
+					HeightMapApplied = false;
+				}
+		*/
 		private void SaveFileDialogGCode_FileOk(object sender, System.ComponentModel.CancelEventArgs e)
 		{
 			if (machine.Mode == Machine.OperatingMode.SendFile)
@@ -83,8 +171,20 @@ namespace OpenCNCPilot
 			if (machine.Mode == Machine.OperatingMode.SendFile)
 				return;
 
-			machine.ClearFile();
+			// 1. Unsere neue Layer-Liste komplett leeren
+			AllLayers.Clear();
+
+			// 2. Die Anzeige der Namen aktualisieren (damit sie verschwinden)
+			UpdateLayerDisplay();
+
+			// 3. Den G-Code in der Maschine löschen (wie im Original)
+			machine.SetFile(new string[0]);
+
+			// 4. Den Dateinamen-Text oben zurücksetzen
 			CurrentFileName = "";
+
+			// Falls vorhanden, Zeilenanzeige auf 0
+			if (RunFileLength != null) RunFileLength.Text = "0";
 		}
 
 		private void ButtonFileStart_Click(object sender, RoutedEventArgs e)
@@ -116,5 +216,115 @@ namespace OpenCNCPilot
 
 			machine.FileGoto((int)value - 1);
 		}
+
+		// Diese Methode berechnet den G-Code neu, wenn ein Haken gesetzt/entfernt wird
+		private void LayerCheckBox_Click(object sender, RoutedEventArgs e)
+		{
+			// 1. G-Code über unsere neue Logik zusammenbauen (ohne M02, mit Z10)
+			string totalGCode = GetCombinedGCode();
+
+			// 2. In Zeilen zerlegen
+			string[] lines = totalGCode.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.RemoveEmptyEntries);
+
+			// 3. Der Maschine geben (Das aktualisiert bei dir ALLES)
+			if (lines.Length > 0)
+			{
+				machine.SetFile(lines); // Das ist der Befehl, der bei dir funktioniert!
+
+				// UI-Längenanzeige
+				RunFileLength.Text = lines.Length.ToString();
+			}
+			else
+			{
+				machine.SetFile(new string[0]);
+				RunFileLength.Text = "0";
+			}
+		}
+
+		// Diese Methode blendet das Layer-Fenster ein oder aus
+		private void UpdateLayerDisplay()
+		{
+			// NEU: Der Button ist nur aktiv, wenn mindestens ein Layer existiert
+			ButtonFileAdd.IsEnabled = AllLayers.Count > 0;
+
+			// Deine bisherige Logik für die Sichtbarkeit des Panels
+			LayerPanel.Visibility = (AllLayers.Count > 1) ? Visibility.Visible : Visibility.Collapsed;
+
+			ListViewLayers.ItemsSource = null;
+			ListViewLayers.ItemsSource = AllLayers;
+		}
+
+		private string GetCombinedGCode()
+		{
+			StringBuilder sb = new StringBuilder();
+			var activeLayers = AllLayers.Where(l => l.IsActive).ToList();
+
+			for (int i = 0; i < activeLayers.Count; i++)
+			{
+				var layer = activeLayers[i];
+				string content = string.Join(Environment.NewLine, layer.Content);
+
+				// Filterung für Zwischen-Layer (NICHT der letzte)
+				if (i < activeLayers.Count - 1)
+				{
+					// Program Ende (M2/M30) - Martins Checkbox nutzen
+					if (!Settings.Default.GCodeIncludeMEnd) // Falls die Checkbox NICHT angehakt ist -> entfernen
+					{
+						content = content.Replace("M02", "(M02 bypassed)").Replace("m02", "(m02 bypassed)")
+										 .Replace("M30", "(M30 bypassed)").Replace("m30", "(m30 bypassed)");
+					}
+
+					// Spindel Ein/Aus (M3/M5) - Unsere neue Checkbox
+					if (!Settings.Default.GCodeIncludeSpindleOnOff)
+					{
+						content = content.Replace("M03", "(M03 bypassed)").Replace("M3", "(M3 bypassed)")
+										 .Replace("M05", "(M05 bypassed)").Replace("M5", "(M5 bypassed)");
+					}
+
+					// Werkzeugwechsel (T1, T2...) - Unsere neue Checkbox
+					if (!Settings.Default.GCodeIncludeToolChange)
+					{
+						// Regex findet T gefolgt von beliebigen Zahlen
+						content = System.Text.RegularExpressions.Regex.Replace(content, @"(?i)T\d+", "(Toolchange bypassed)");
+					}
+
+					content += Environment.NewLine + "G0 Z10 (Sicherheits-Hoehe fuer Layerwechsel)" + Environment.NewLine;
+				}
+
+				// Zero-Length Moves filtern (Das kann für ALLE Layer gelten)
+				if (Settings.Default.GCodeFilterZeroMoves)
+				{
+					content = FilterZeroLengthMoves(content);
+				}
+
+				sb.AppendLine($"(--- Start Layer: {layer.Name} ---)");
+				sb.AppendLine(content);
+				sb.AppendLine();
+			}
+
+			return sb.ToString();
+		}
+
+		// Hilfsfunktion um den Code sauber zu halten
+		private string FilterZeroLengthMoves(string input)
+		{
+			string[] lines = input.Split(new[] { Environment.NewLine }, StringSplitOptions.None);
+			StringBuilder clean = new StringBuilder();
+			string lastPos = "";
+
+			foreach (var line in lines)
+			{
+				string current = line.Trim();
+				// Erkennt Zeilen die exakt gleich sind (oft bei pcb-gcode)
+				if (current.StartsWith("G1") || current.StartsWith("G0"))
+				{
+					if (current == lastPos) continue;
+					lastPos = current;
+				}
+				clean.AppendLine(line);
+			}
+			return clean.ToString();
+		}
+
 	}
 }

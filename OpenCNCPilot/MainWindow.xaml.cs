@@ -11,6 +11,7 @@ using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Interop;
+using System.Collections.ObjectModel;
 
 namespace OpenCNCPilot
 {
@@ -22,6 +23,8 @@ namespace OpenCNCPilot
 		SaveFileDialog saveFileDialogGCode = new SaveFileDialog() { Filter = Constants.FileFilterGCode };
 		OpenFileDialog openFileDialogHeightMap = new OpenFileDialog() { Filter = Constants.FileFilterHeightMap };
 		SaveFileDialog saveFileDialogHeightMap = new SaveFileDialog() { Filter = Constants.FileFilterHeightMap };
+
+		ObservableCollection<GCodeLayer> AllLayers = new ObservableCollection<GCodeLayer>();
 
 		GCodeFile ToolPath { get; set; } = GCodeFile.Empty;
 		HeightMap Map { get; set; }
@@ -518,5 +521,13 @@ namespace OpenCNCPilot
 
 			return IntPtr.Zero;
 		}
+	}
+	// Diese kleine Klasse hilft uns, Name und Inhalt der Datei zu speichern
+	public class GCodeLayer
+	{
+		public string Name { get; set; }
+		public string[] Content { get; set; }
+		public string Filename { get; set; }
+		public bool IsActive { get; set; } = true;
 	}
 }

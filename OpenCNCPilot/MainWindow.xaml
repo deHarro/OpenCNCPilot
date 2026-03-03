@@ -12,7 +12,7 @@
 		DragEnter="Window_DragEnter"
 		DataContext="{Binding RelativeSource={RelativeSource Self}}"
 		PreviewKeyDown="Window_PreviewKeyDown"
-		Title="{Binding WindowTitle,Mode=OneWay}" Height="{util:SettingBinding WindowHeight}" Width="{util:SettingBinding WindowWidth}" Closing="Window_Closing">
+		Title="{Binding WindowTitle,Mode=OneWay}" Height="{util:SettingBinding WindowHeight}" Width="1400" Closing="Window_Closing">
     <Window.Resources>
         <ResourceDictionary Source="MainWindow.Resources.xaml"/>
     </Window.Resources>
@@ -52,29 +52,35 @@
             <StackPanel Orientation="Vertical" HorizontalAlignment="Left">
                 <Border Style="{StaticResource stylePanelOut}">
                     <Expander Header="File" Width="Auto" IsExpanded="{util:SettingBinding FileExpanderOpen}">
-                        <!--<Grid Width="230" Height="260">     --> <!-- increased the listbox width in order to make long lines readable, deHarro, 2023-10-04 -->
                         <Grid Height="260">
-                            <Grid.ColumnDefinitions> <!-- made listbox width adapt to line length, deHarro, 2024-08-27 -->
+                            <Grid.ColumnDefinitions>
+                                <!-- made listbox width adapt to line length, deHarro, 2024-08-27 -->
                                 <ColumnDefinition Width="Auto" MinWidth="189"/>
                                 <ColumnDefinition Width="0"/>
                             </Grid.ColumnDefinitions>
-                            <Button Name="ButtonFileOpen" Click="ButtonOpen_Click" Content="Open" Style="{StaticResource styleButton}" HorizontalAlignment="Left" Margin="5,5,0,0" VerticalAlignment="Top" Width="38"/>
-                            <Button Name="ButtonFileSave" Click="ButtonSave_Click" Content="Save" Style="{StaticResource styleButton}" HorizontalAlignment="Left" Margin="48,5,0,0" VerticalAlignment="Top" Width="34"/>
-                            <Button Name="ButtonFileClear" Click="ButtonClear_Click" Content="Clear" Style="{StaticResource styleButton}" HorizontalAlignment="Left" Margin="87,5,0,0" VerticalAlignment="Top" Width="36"/>
-                            <TextBlock  VerticalAlignment="Top" Margin="128,9,0,0" Height="16">
-								<Run Name="RunFilePosition" Text="0"/>
-								<Run Text="/"/>
-								<Run Name="RunFileLength"  Text="0"/>
-                            </TextBlock>
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Top" Margin="5,5,0,0" Grid.ColumnSpan="2">
+                                <Button Name="ButtonFileOpen" Click="ButtonOpen_Click" Content="Open" Style="{StaticResource styleButton}" Margin="0,0,0,0"  Padding="3,0"/>
+                                <Button Name="ButtonFileSave" Click="ButtonSave_Click" Content="Save" Style="{StaticResource styleButton}" Margin="4,0,0,0" Padding="3,0"/>
+                                <Button Name="ButtonFileClear" Click="ButtonClear_Click" Content="Clear" Style="{StaticResource styleButton}" Margin="4,0,0,0" Padding="3,0"/>
+                                <Button Name="ButtonFileAdd" Click="ButtonAddLayer_Click" IsEnabled="False" Content="Add Layer" Style="{StaticResource styleButton}" Margin="4,0,0,0" Padding="5,0"/>
 
-                            <ListView Name="ListViewFile"  Margin="0,33,0,50" ScrollViewer.HorizontalScrollBarVisibility="Auto" Background="Transparent"/> <!-- activate horizontal scrollbar in order to make long lines readable, deHarro, 2023-10-04 -->
+                                <TextBlock Margin="8,4,0,0" VerticalAlignment="Center">
+                                    <Run Name="RunFilePosition" Text="0"/>
+                                    <Run Text="/"/>
+                                    <Run Name="RunFileLength"  Text="0"/>
+                                </TextBlock>
+                            </StackPanel>
+                            <ListView Name="ListViewFile" Margin="5,37,0,53" ScrollViewer.HorizontalScrollBarVisibility="Auto" Background="Transparent" Grid.ColumnSpan="2"/>
 
-                            <Button Name="ButtonFileStart" Click="ButtonFileStart_Click" Content="Start" Style="{StaticResource styleButton}" HorizontalAlignment="Left" Margin="5,0,0,25" Height="23" VerticalAlignment="Bottom" Width="33"/>
-                            <Button Name="ButtonFilePause" Click="ButtonFilePause_Click" Content="Pause" Style="{StaticResource styleButton}" HorizontalAlignment="Left" Margin="48,0,0,25" Height="23" VerticalAlignment="Bottom" Width="40"/>
-                            <Button Name="ButtonFileGoto" Click="ButtonFileGoto_Click" Content="Go To" Style="{StaticResource styleButton}" HorizontalAlignment="Left" Margin="93,0,0,25" Height="23" VerticalAlignment="Bottom" Width="40"/>
-                            <CheckBox Name="CheckBoxPauseOnM0" Content="Pause" ToolTip="Pause the Program on M0/M1/M30" IsChecked="{util:SettingBinding PauseFileOnHold}" HorizontalAlignment="Left" Margin="138,0,0,20" Height="23" VerticalAlignment="Bottom" Width="51"/>
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Left" Margin="5,5,0,5">                                                            
+                            <Button Name="ButtonFileStart" Click="ButtonFileStart_Click" Content="Start" Style="{StaticResource styleButton}" HorizontalAlignment="Left" Margin="0,0,5,20" Height="23" VerticalAlignment="Bottom" Width="33" Grid.ColumnSpan="2"/>
+                            <Button Name="ButtonFilePause" Click="ButtonFilePause_Click" Content="Pause" Style="{StaticResource styleButton}" HorizontalAlignment="Left" Margin="0,0,5,20" Height="23" VerticalAlignment="Bottom" Width="40" Grid.Column="1"/>
+                            <Button Name="ButtonFileGoto" Click="ButtonFileGoto_Click" Content="Go To" Style="{StaticResource styleButton}" HorizontalAlignment="Left" Margin="0,0,5,20" Height="23" VerticalAlignment="Bottom" Width="40" Grid.Column="1"/>
+                            <CheckBox Name="CheckBoxPauseOnM0" Content="Pause" ToolTip="Pause the Program on M0/M1/M30" IsChecked="{util:SettingBinding PauseFileOnHold}" HorizontalAlignment="Left" Margin="0,0,5,15" Height="23" VerticalAlignment="Bottom" Width="51" Grid.Column="1"/>
+                                
+                            </StackPanel>
 
-                            <TextBlock  VerticalAlignment="Bottom" Margin="10,0,0,4" HorizontalAlignment="Left" Height="16" Width="150">
+                            <TextBlock  VerticalAlignment="Bottom" Margin="10,0,0,4" HorizontalAlignment="Left" Height="16" Width="150" Grid.ColumnSpan="2">
 								<Run Text="Runtime:"/>
 								<Run Name="RunFileRunTime" Text="00:00:00"/>
 								<Run Text="/"/>
@@ -83,6 +89,38 @@
                         </Grid>
                     </Expander>
                 </Border>
+
+                <Border Name="LayerPanel" 
+                Style="{StaticResource stylePanelOut}" 
+                Visibility="Collapsed">
+                    <Expander Header="Kombinierte Dateien (Layer)" 
+                    Style="{StaticResource {x:Type Expander}}"
+                    IsExpanded="True">
+
+                <ItemsControl Name="ListViewLayers" Margin="5,2,5,5">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Grid Margin="0,2">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="25" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+
+                                <CheckBox IsChecked="{Binding IsActive}" 
+                            Click="LayerCheckBox_Click" 
+                            VerticalAlignment="Center" />
+
+                                <TextBlock Grid.Column="1" 
+                            Text="{Binding Name}" 
+                            VerticalAlignment="Center" 
+                            FontSize="11" />
+                            </Grid>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                    </Expander>
+                </Border>
+                
                 <Border Style="{StaticResource stylePanelOut}">
                     <Expander Header="Edit" IsExpanded="{util:SettingBinding EditExpanderOpen}">
                         <WrapPanel Width="180">
@@ -306,22 +344,22 @@
 								<Hyperlink RequestNavigate="Hyperlink_RequestNavigate" NavigateUri="https://github.com/martin2250/OpenCNCPilot">Project Page</Hyperlink>
 								<Hyperlink RequestNavigate="Hyperlink_RequestNavigate" NavigateUri="https://github.com/martin2250/OpenCNCPilot/issues">Help</Hyperlink>
                             </TextBlock>
-                            <TextBlock Text="Mod: Joystick Jogging v1.1, deHarro - 2026-02-22" Foreground="Gray" FontSize="10" Margin="5,5,0,5" />
+                            <TextBlock Text="Mod: v1.3, deHarro - 2026-03-03" Foreground="Gray" FontSize="10" Margin="5,5,0,5" ToolTip="Joystick-Jogging 1.1, Layer-Stacking 1.2, GCode-Filter 1.3"/>
                         </StackPanel>
                     </Expander>
                 </Border>
                 <Border Style="{StaticResource stylePanelOut}">
                     <Expander Header="Debug" IsExpanded="{util:SettingBinding DebugExpanderOpen}">
                         <StackPanel HorizontalAlignment="Left" Margin="0,0,0,5">
-                            <!--<CheckBox Content="Show Status Messages" IsChecked="{util:SettingBinding ShowStatusLines}" Margin="10,0,0,0"/>--> <!--deHarro, 2024-09-12-->
-                           <CheckBox Content="Show Status Messages" IsChecked="{util:SettingBinding ShowStatusLines}" FlowDirection="RightToLeft" Margin="10,10,0,5">
-                                <CheckBox.Resources>                                    
+                            <!--deHarro, 2024-09-12-->
+                            <CheckBox Content="Show Status Messages" IsChecked="{util:SettingBinding ShowStatusLines}" FlowDirection="RightToLeft" Margin="10,10,0,5">
+                                <CheckBox.Resources>
                                     <Style TargetType="{x:Type Path}">
                                         <Setter Property="FlowDirection" Value="LeftToRight" />
                                     </Style>
                                 </CheckBox.Resources>
                             </CheckBox>
-                             <StackPanel Orientation="Horizontal">
+                            <StackPanel Orientation="Horizontal">
                                 <TextBox Text="{util:SettingBinding ConsoleFadeTime}" VerticalContentAlignment="Center" Width="40" Margin="10,3,0,3"/>
                                 <Label Content="Console Fade Time (s)" FlowDirection="LeftToRight"/>
                             </StackPanel>
@@ -329,7 +367,8 @@
                             <Button Style="{StaticResource styleButton}" Content="Restore Viewport" HorizontalAlignment="Left" Margin="10,5,0,0" Click="ButtonRestoreViewport_Click" ToolTip="Restore viewport from settings"/>
                             <Button Style="{StaticResource styleButton}" Content="Reset 3D Viewport" HorizontalAlignment="Left" Margin="10,5,0,0" Click="ButtonResetViewport_Click" ToolTip="Restore viewport to factory default"/>
                             <StackPanel Orientation="Horizontal">
-                                <Button Style="{StaticResource styleButton}" Content="Lay flat 3D Viewport" HorizontalAlignment="Left" Margin="10,5,0,0" Click="ButtonLayFlatViewport_Click" ToolTip="Restore viewport to centered from top"/>    <!-- deHarro, 2024-08-23 -->
+                                <Button Style="{StaticResource styleButton}" Content="Lay flat 3D Viewport" HorizontalAlignment="Left" Margin="10,5,0,0" Click="ButtonLayFlatViewport_Click" ToolTip="Restore viewport to centered from top"/>
+                                <!-- deHarro, 2024-08-23 -->
                                 <Button Style="{StaticResource styleButton}" Content="RO" HorizontalAlignment="Left" Margin="10,5,0,0" Click="ButtonRotateOrigin_Click">
                                     <Button.ToolTip>
                                         <TextBlock FlowDirection="LeftToRight">
