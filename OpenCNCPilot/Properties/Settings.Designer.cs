@@ -802,5 +802,41 @@ namespace OpenCNCPilot.Properties {
                 this["JoystickMaxFeedZ"] = value;
             }
         }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("False")]
+        public bool GCodeIncludeSpindleOnOff {
+            get {
+                return ((bool)(this["GCodeIncludeSpindleOnOff"]));
+            }
+            set {
+                this["GCodeIncludeSpindleOnOff"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("False")]
+        public bool GCodeIncludeToolChange {
+            get {
+                return ((bool)(this["GCodeIncludeToolChange"]));
+            }
+            set {
+                this["GCodeIncludeToolChange"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("True")]
+        public bool GCodeFilterZeroMoves {
+            get {
+                return ((bool)(this["GCodeFilterZeroMoves"]));
+            }
+            set {
+                this["GCodeFilterZeroMoves"] = value;
+            }
+        }
     }
 }

@@ -139,8 +139,13 @@
                 <CheckBox Content="Keep Spindle 'S' Commands" HorizontalAlignment="Left" Margin="116,10,0,0" VerticalAlignment="Top" IsChecked="{util:SettingBinding GCodeIncludeSpindle}" ToolTip="Strip S[XX] from file before sending to machine if not checked"/>
                 <CheckBox Content="Keep Dwell 'G4' Commands" HorizontalAlignment="Left" Margin="116,30,0,0" VerticalAlignment="Top" IsChecked="{util:SettingBinding GCodeIncludeDwell}" ToolTip="Strip G4 P[XX] from file before sending to machine if not checked"/>
                 <CheckBox Content="Keep Program End (M2, M30)" HorizontalAlignment="Left" Margin="116,50,0,0" VerticalAlignment="Top" IsChecked="{util:SettingBinding GCodeIncludeMEnd}" ToolTip="Strip M2/M30 from file before sending to machine if not checked. Default is off since these commands reset offsets from G92."/>
+
+                <CheckBox Content="Keep Spindle ON/OFF (M3, M5)" HorizontalAlignment="Left" Margin="116,90,0,0" VerticalAlignment="Top" IsChecked="{util:SettingBinding GCodeIncludeSpindleOnOff}" ToolTip="Keep M3/M5 commands between layers. Uncheck to keep spindle running."/>
+                <CheckBox Content="Keep Tool Change (T1, T2...)" HorizontalAlignment="Left" Margin="116,110,0,0" VerticalAlignment="Top" IsChecked="{util:SettingBinding GCodeIncludeToolChange}" ToolTip="Keep tool change commands. Uncheck if using the same tool for all layers."/>
+                <CheckBox Content="Filter Zero-Length Moves" HorizontalAlignment="Left" Margin="116,130,0,0" VerticalAlignment="Top" IsChecked="{util:SettingBinding GCodeFilterZeroMoves}" ToolTip="Remove redundant moves to the same coordinate to avoid 'zero-length' warnings."/>
             </Grid>
         </TabItem>
+        
         <TabItem Header="Joystick">
             <ScrollViewer VerticalScrollBarVisibility="Auto">
                 <StackPanel Margin="10">
