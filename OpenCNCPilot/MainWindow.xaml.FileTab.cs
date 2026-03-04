@@ -8,6 +8,7 @@ using Microsoft.Win32;
 using System.IO;
 using System.Text;
 using OpenCNCPilot.Properties;
+using System.Windows.Controls;
 
 namespace OpenCNCPilot
 {
@@ -244,12 +245,22 @@ namespace OpenCNCPilot
 		// Diese Methode blendet das Layer-Fenster ein oder aus
 		private void UpdateLayerDisplay()
 		{
-			// NEU: Der Button ist nur aktiv, wenn mindestens ein Layer existiert
+			// 1. Status berechnen (Wer ist oben, wer unten?)
+			for (int i = 0; i < AllLayers.Count; i++)
+			{
+				var layer = AllLayers[i] as GCodeLayer;
+				if (layer != null)
+				{
+					layer.IsNotFirst = (i > 0);						// Erster bekommt false
+					layer.IsNotLast = (i < AllLayers.Count - 1);	// Letzter bekommt false
+				}
+			}
+
+			// 2. UI-Panel Sichtbarkeit
+			LayerPanel.Visibility = (AllLayers.Count > 1) ? Visibility.Visible : Visibility.Collapsed;
 			ButtonFileAdd.IsEnabled = AllLayers.Count > 0;
 
-			// Deine bisherige Logik für die Sichtbarkeit des Panels
-			LayerPanel.Visibility = (AllLayers.Count > 1) ? Visibility.Visible : Visibility.Collapsed;
-
+			// 3. Liste neu binden (erzwingt das Neuzeichnen der Buttons)
 			ListViewLayers.ItemsSource = null;
 			ListViewLayers.ItemsSource = AllLayers;
 		}
@@ -263,6 +274,31 @@ namespace OpenCNCPilot
 			{
 				var layer = activeLayers[i];
 				string content = string.Join(Environment.NewLine, layer.Content);
+
+				// Werkzeugwechsel (T1, T2... und M06) - Globaler Filter
+				if (!Settings.Default.GCodeIncludeToolChange)
+				{
+					var lines = content.Split(new[] { Environment.NewLine, "\n" }, StringSplitOptions.None);
+					for (int j = 0; j < lines.Length; j++)
+					{
+						string trimmed = lines[j].Trim();
+
+						// NUR bearbeiten, wenn die Zeile NICHT bereits ein Kommentar ist
+						if (!string.IsNullOrEmpty(trimmed) && !trimmed.StartsWith("("))
+						{
+							string upper = trimmed.ToUpper();
+							if (upper.Contains("M06") || System.Text.RegularExpressions.Regex.IsMatch(upper, @"T\d+"))
+							{
+								// WICHTIG: Semikolons entfernen, da sie OCP innerhalb von Klammern verwirren
+								string safeLine = trimmed.Replace(";", "-");
+
+								// Jetzt sicher einklammern
+								lines[j] = "(" + safeLine + " - suppressed)";
+							}
+						}
+					}
+					content = string.Join(Environment.NewLine, lines);
+				}
 
 				// Filterung für Zwischen-Layer (NICHT der letzte)
 				if (i < activeLayers.Count - 1)
@@ -279,13 +315,6 @@ namespace OpenCNCPilot
 					{
 						content = content.Replace("M03", "(M03 bypassed)").Replace("M3", "(M3 bypassed)")
 										 .Replace("M05", "(M05 bypassed)").Replace("M5", "(M5 bypassed)");
-					}
-
-					// Werkzeugwechsel (T1, T2...) - Unsere neue Checkbox
-					if (!Settings.Default.GCodeIncludeToolChange)
-					{
-						// Regex findet T gefolgt von beliebigen Zahlen
-						content = System.Text.RegularExpressions.Regex.Replace(content, @"(?i)T\d+", "(Toolchange bypassed)");
 					}
 
 					content += Environment.NewLine + "G0 Z10 (Sicherheits-Hoehe fuer Layerwechsel)" + Environment.NewLine;
@@ -326,5 +355,52 @@ namespace OpenCNCPilot
 			return clean.ToString();
 		}
 
+		private void ButtonMoveLayerUp_Click(object sender, RoutedEventArgs e)
+		{
+			var layer = (sender as Button).DataContext as GCodeLayer;
+			if (layer != null)
+			{
+				int index = AllLayers.IndexOf(layer);
+				if (index > 0)
+				{
+					AllLayers.Move(index, index - 1);
+					UpdateLayerDisplay(); // Buttons aktualisieren
+					LayerCheckBox_Click(null, null); // G-Code neu berechnen
+				}
+			}
+		}
+
+		private void ButtonMoveLayerDown_Click(object sender, RoutedEventArgs e)
+		{
+			var layer = (sender as Button).DataContext as GCodeLayer;
+			if (layer != null)
+			{
+				int index = AllLayers.IndexOf(layer);
+				if (index >= 0)
+				{
+					AllLayers.Move(index, index + 1);
+					UpdateLayerDisplay(); // Buttons aktualisieren
+					LayerCheckBox_Click(null, null); // G-Code neu berechnen
+				}
+			}
+		}
+
+		// Hilfsmethode, um den Code nicht doppelt schreiben zu müssen (wie in deinem CheckBox_Click)
+		private void UpdateMachineFile()
+		{
+			string totalGCode = GetCombinedGCode();
+			string[] lines = totalGCode.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.RemoveEmptyEntries);
+
+			if (lines.Length > 0)
+			{
+				machine.SetFile(lines);
+				RunFileLength.Text = lines.Length.ToString();
+			}
+			else
+			{
+				machine.SetFile(new string[0]);
+				RunFileLength.Text = "0";
+			}
+		}
 	}
 }

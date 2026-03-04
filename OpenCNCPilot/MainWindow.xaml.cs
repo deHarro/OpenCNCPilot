@@ -12,6 +12,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Interop;
 using System.Collections.ObjectModel;
+using System.ComponentModel; 
 
 namespace OpenCNCPilot
 {
@@ -522,12 +523,45 @@ namespace OpenCNCPilot
 			return IntPtr.Zero;
 		}
 	}
+
 	// Diese kleine Klasse hilft uns, Name und Inhalt der Datei zu speichern
-	public class GCodeLayer
+	public class GCodeLayer : INotifyPropertyChanged
 	{
 		public string Name { get; set; }
 		public string[] Content { get; set; }
 		public string Filename { get; set; }
 		public bool IsActive { get; set; } = true;
+
+		// Logik für das Ausgrauen der Pfeile
+		private bool _isNotFirst = true;
+		public bool IsNotFirst
+		{
+			get => _isNotFirst;
+			set
+			{
+				if (_isNotFirst == value) return;
+				_isNotFirst = value;
+				OnPropertyChanged("IsNotFirst");
+			}
+		}
+
+		private bool _isNotLast = true;
+		public bool IsNotLast
+		{
+			get => _isNotLast;
+			set
+			{
+				if (_isNotLast == value) return;
+				_isNotLast = value;
+				OnPropertyChanged("IsNotLast");
+			}
+		}
+
+		// --- Ab hier: Das "Sprachrohr" zum UI ---
+		public event PropertyChangedEventHandler PropertyChanged;
+		protected void OnPropertyChanged(string name)
+		{
+			PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
+		}
 	}
 }
