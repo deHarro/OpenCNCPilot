@@ -154,7 +154,15 @@ namespace OpenCNCPilot.GCode
 
 				if (!ValidWords.Contains(Words[i].Command))
 				{
-					Warnings.Add($"ignoring unknown word (letter): \"{Words[i]}\". (line {lineNumber})");
+					// Wenn es ein 'T' ist und wir Toolchanges ignorieren wollen, keine Warnung loggen
+					bool isToolCommand = Words[i].Command == 'T';
+					bool silenceWarning = isToolCommand && !Properties.Settings.Default.GCodeIncludeToolChange;
+
+					if (!silenceWarning)
+					{
+						Warnings.Add($"ignoring unknown word (letter): \"{Words[i]}\". (line {lineNumber})");
+					}
+
 					Words.RemoveAt(i--);
 					continue;
 				}
@@ -174,6 +182,13 @@ namespace OpenCNCPilot.GCode
 				if (Words[i].Command == 'M')
 				{
 					int param = (int)Words[i].Parameter;
+
+					// NEU: M06 komplett verschlucken, wenn Toolchanges nicht erwünscht sind
+					if (param == 6 && !Properties.Settings.Default.GCodeIncludeToolChange)
+					{
+						Words.RemoveAt(i--);
+						continue;
+					}
 
 					if (param != Words[i].Parameter || param < 0)
 						throw new ParseException("M code can only have positive integer parameters", lineNumber);

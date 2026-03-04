@@ -44,7 +44,12 @@ namespace OpenCNCPilot.GCode
 
 					if (m.Start == m.End)
 					{
-						Warnings.Add($"ignoring zero-length move from line number {m.LineNumber}");
+						// Wir unterdrücken nur die Meldung basierend auf den Settings...
+						if (!Properties.Settings.Default.GCodeFilterZeroMoves)
+						{
+							Warnings.Add($"ignoring zero-length move from line number {m.LineNumber}");
+						}
+						// ...und lassen Martin seine Arbeit machen und die Zeile entfernen
 						toolpath.RemoveAt(i--);
 					}
 				}
