@@ -265,6 +265,34 @@ namespace OpenCNCPilot
 			ListViewLayers.ItemsSource = AllLayers;
 		}
 
+		private void ButtonReloadAll_Click(object sender, RoutedEventArgs e)
+		{
+			try
+			{
+				foreach (var layer in AllLayers)
+				{
+					if (!string.IsNullOrEmpty(layer.Filename) && System.IO.File.Exists(layer.Filename))
+					{
+						// Die Datei wird einfach neu eingelesen und der Content überschrieben
+						layer.Content = System.IO.File.ReadAllLines(layer.Filename);
+					}
+				}
+
+				// 1. Die Anzeige aktualisieren (damit eventuelle Zeilenänderungen sichtbar werden)
+				UpdateLayerDisplay();
+
+				// 2. Den kombinierten Code neu berechnen und an die Maschine/Viewer senden
+				LayerCheckBox_Click(null, null);
+
+				// Optional: Ein kurzer Hinweis, dass es geklappt hat
+				// MessageBox.Show("Alle Layer wurden neu geladen!");
+			}
+			catch (Exception ex)
+			{
+				MessageBox.Show("Fehler beim Neuladen: " + ex.Message);
+			}
+		}
+
 		private string GetCombinedGCode()
 		{
 			StringBuilder sb = new StringBuilder();

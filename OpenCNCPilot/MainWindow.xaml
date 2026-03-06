@@ -91,11 +91,33 @@
                 </Border>
 
                 <Border Name="LayerPanel" 
-                Style="{StaticResource stylePanelOut}" 
-                Visibility="Collapsed">
-                    <Expander Header="Kombinierte Dateien (Layer)" 
-                    Style="{StaticResource {x:Type Expander}}"
-                    IsExpanded="True">
+                    Style="{StaticResource stylePanelOut}" 
+                    Visibility="Visible">
+
+                    <Expander Style="{StaticResource {x:Type Expander}}"
+                         IsExpanded="True">
+
+                        <Expander.Header>
+                            <DockPanel HorizontalAlignment="Stretch" 
+                            Width="{Binding ActualWidth, RelativeSource={RelativeSource AncestorType=ContentPresenter}}">
+
+                            <Button DockPanel.Dock="Right" 
+                                Content="🔄" 
+                                Click="ButtonReloadAll_Click" 
+                                VerticalAlignment="Top" 
+                                Width="23" Height="21" 
+                                FontSize="14" 
+                                Padding="0"
+                                ToolTip="Reload all files from disk"
+                                Background="#F0F0F0"
+                                Margin="10,0,0,0" />
+
+                                <TextBlock Text="Combined Files (Layer)&#160;&#160;&#160;" 
+                                    Margin="0,0,-10,0"
+                                    VerticalAlignment="Center" 
+                                    FontWeight="Bold" Width="168" />
+                            </DockPanel>
+                        </Expander.Header>
 
                         <ItemsControl Name="ListViewLayers" Margin="5,2,5,5">
                             <ItemsControl.ItemTemplate>
@@ -364,7 +386,37 @@
 								<Hyperlink RequestNavigate="Hyperlink_RequestNavigate" NavigateUri="https://github.com/martin2250/OpenCNCPilot">Project Page</Hyperlink>
 								<Hyperlink RequestNavigate="Hyperlink_RequestNavigate" NavigateUri="https://github.com/martin2250/OpenCNCPilot/issues">Help</Hyperlink>
                             </TextBlock>
-                            <TextBlock Text="Mod: v1.3, deHarro - 2026-03-03" Foreground="Gray" FontSize="10" Margin="5,5,0,5" ToolTip="Joystick-Jogging 1.1, Layer-Stacking 1.2, GCode-Filter 1.3"/>
+
+                            <Grid FlowDirection="LeftToRight" Margin="5,5,10,5">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+
+                                <StackPanel Grid.Column="1" Orientation="Horizontal">
+                                    <TextBlock FontSize="10">
+                                        <Hyperlink RequestNavigate="Hyperlink_RequestNavigate" NavigateUri="https://github.com/deHarro/OpenCNCPilot" TextDecorations="None">Mod: deHarro</Hyperlink>
+                                    </TextBlock>
+
+                                    <TextBlock Text=" - v1.4, 2026-03-04" 
+                                       Foreground="Gray" 
+                                       FontSize="10" />
+                                </StackPanel>
+
+                                <Grid.ToolTip>
+                                    <ToolTip FlowDirection="LeftToRight">
+                                        <TextBlock FontSize="10">
+                                            <StackPanel Margin="3">
+                                                <TextBlock Text="Version History:" FontWeight="Bold" Margin="0,0,0,5"/>
+                                                <TextBlock Text="v1.1: Joystick-Jogging"/>
+                                                <TextBlock Text="v1.2: Layer-Stacking"/>
+                                                <TextBlock Text="v1.3: GCode-Filter"/>
+                                                <TextBlock Text="v1.4: Sort Layerlist"/>
+                                            </StackPanel>
+                                        </TextBlock>
+                                    </ToolTip>
+                                </Grid.ToolTip>
+                            </Grid>
                         </StackPanel>
                     </Expander>
                 </Border>
