@@ -259,6 +259,7 @@ namespace OpenCNCPilot
 			// 2. UI-Panel Sichtbarkeit
 			LayerPanel.Visibility = (AllLayers.Count > 1) ? Visibility.Visible : Visibility.Collapsed;
 			ButtonFileAdd.IsEnabled = AllLayers.Count > 0;
+			ButtonReloadAll.IsEnabled = AllLayers.Count > 0;
 
 			// 3. Liste neu binden (erzwingt das Neuzeichnen der Buttons)
 			ListViewLayers.ItemsSource = null;

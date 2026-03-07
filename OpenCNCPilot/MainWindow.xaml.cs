@@ -12,7 +12,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Interop;
 using System.Collections.ObjectModel;
-using System.ComponentModel; 
+using System.ComponentModel;
 
 namespace OpenCNCPilot
 {
@@ -26,6 +26,9 @@ namespace OpenCNCPilot
 		SaveFileDialog saveFileDialogHeightMap = new SaveFileDialog() { Filter = Constants.FileFilterHeightMap };
 
 		ObservableCollection<GCodeLayer> AllLayers = new ObservableCollection<GCodeLayer>();
+
+		System.Windows.Media.Media3D.Point3D? lastClickPoint = null;
+		bool isViewFlat = false;			// wurde der Viewport flach auf X/Y-Ebene gelegt? (Button "Lay flat 3D Viewport" in der Debug-Box)
 
 		GCodeFile ToolPath { get; set; } = GCodeFile.Empty;
 		HeightMap Map { get; set; }
@@ -213,7 +216,7 @@ namespace OpenCNCPilot
 			}
 		}
 
-		public bool IsJoggingAllowed				// deHarry, 2026-02-19
+		public bool IsJoggingAllowed                // deHarry, 2026-02-19
 		{
 			get
 			{
@@ -373,75 +376,319 @@ namespace OpenCNCPilot
 			}
 		}
 
-		private void ButtonResetViewport_Click(object sender, RoutedEventArgs e)
+		private void Window_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
 		{
-			viewport.Camera.Position        = new System.Windows.Media.Media3D.Point3D(50, -150, 250);
-			viewport.Camera.LookDirection   = new System.Windows.Media.Media3D.Vector3D(-50, 150, -250);
-			viewport.Camera.UpDirection     = new System.Windows.Media.Media3D.Vector3D(0, 0, 1);
+			if (e.Key == System.Windows.Input.Key.Escape)
+			{
+				// 1. Letzten Punkt löschen
+				lastClickPoint = null;
+
+				// 2. Anzeige in der Debug-Box zurücksetzen
+				if (txtViewportDist != null)
+				{
+					txtViewportDist.Text = "Messung zurückgesetzt";
+				}
+
+				// Optional: Falls du ein rotes Kreuz oder eine Markierung hättest, 
+				// könnte man sie hier auch ausblenden.
+			}
 		}
 
+		private void ButtonResetViewport_Click(object sender, RoutedEventArgs e)
+		{
+			viewport.Camera.Position = new System.Windows.Media.Media3D.Point3D(50, -150, 250);
+			viewport.Camera.LookDirection = new System.Windows.Media.Media3D.Vector3D(-50, 150, -250);
+			viewport.Camera.UpDirection = new System.Windows.Media.Media3D.Vector3D(0, 0, 1);
+		}
 
-        // ----- ButtonLayFlatViewport ---------------------------------------------------
-        private void ButtonLayFlatViewport_Click(object sender, RoutedEventArgs e)                  // deHarro, 2024-08-23, 2024-09-08, Viewport Horizontal/Vertikal auf dem Bildschirm ausrichten
-        {
-            // deHarro, 2024-09-09, unveränderten Bildausschnitt nur auf Ursprung zentrieren (Z-Pos bleibt unverändert, sonst springt der View nach Reset aus dem Bild)
-            viewport.Camera.Position = new System.Windows.Media.Media3D.Point3D(0, 0, viewport.Camera.Position.Z);
-            viewport.Camera.LookDirection = new System.Windows.Media.Media3D.Vector3D(0, 1, viewport.Camera.LookDirection.Z);
-        }
+		private void viewport_MouseDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
+		{
+			// Sicherheitsabfrage: Nur messen, wenn wir flach draufschauen
+			if (!isViewFlat)
+			{
+				txtViewportCoords.Text = "Nur in 'Lay Flat'-Ansicht möglich";
+				txtViewportDist.Text = "";
+				return;
+			}
 
-        // ----- ButtonRotateOrigin ---------------------------------------------------
-        private void ButtonRotateOrigin_Click(object sender, RoutedEventArgs e)                     // deHarro, 2024-09-11, Origin im Viewport passend zur Fräse ausrichten
-        {
-            {   // do the rotating CCW
-                if (viewport.Camera.LookDirection.X == 0 && viewport.Camera.LookDirection.Y == 1 /*&& viewport.Camera.LookDirection.Z == 1*/)       // (0, 0, z) default
-                {
-                    viewport.Camera.LookDirection = new System.Windows.Media.Media3D.Vector3D(1, 0, viewport.Camera.LookDirection.Z);
-                }
-                else if (viewport.Camera.LookDirection.X == 1 && viewport.Camera.LookDirection.Y == 0 /*&& viewport.Camera.LookDirection.Z == 1*/)  // (1, 0, z) my default 
-                {
-                    viewport.Camera.LookDirection = new System.Windows.Media.Media3D.Vector3D(0, -1, viewport.Camera.LookDirection.Z);
-                }
-                else if (viewport.Camera.LookDirection.X == 0 && viewport.Camera.LookDirection.Y == -1 /*&& viewport.Camera.LookDirection.Z == 1*/) // (0, -1, z) other
-                {
-                    viewport.Camera.LookDirection = new System.Windows.Media.Media3D.Vector3D(-1, 0, viewport.Camera.LookDirection.Z);
-                }
-                else if (viewport.Camera.LookDirection.X == -1 && viewport.Camera.LookDirection.Y == 0 /*&& viewport.Camera.LookDirection.Z == 1*/) // (-1, 0, z) other       {
-                {
-                    viewport.Camera.LookDirection = new System.Windows.Media.Media3D.Vector3D(0, 1, viewport.Camera.LookDirection.Z);
-                }
-            }   // \do the rotating CCW
+			var mousePos = e.GetPosition(viewport);
+			var hitPoint = viewport.FindNearestPoint(mousePos);
 
-            // temporarily save current viewport look direction and camera position
-            System.Windows.Media.Media3D.Vector3D LookDirSave = new System.Windows.Media.Media3D.Vector3D(viewport.Camera.LookDirection.X, viewport.Camera.LookDirection.Y, viewport.Camera.LookDirection.Z);
-            System.Windows.Media.Media3D.Vector3D CamPosSave = new System.Windows.Media.Media3D.Vector3D(viewport.Camera.Position.X, viewport.Camera.Position.Y, viewport.Camera.Position.Z);
+			if (hitPoint.HasValue)
+			{
+				double x = hitPoint.Value.X;
+				double y = hitPoint.Value.Y;
 
-            // get currently stored viewport settings
-            string[] scoords = Properties.Settings.Default.ViewPortPos.Split(';');                  
-            try
-            {
-                IEnumerable<double> settingsCoords = scoords.Select(s => double.Parse(s));
+				// 1. Koordinaten in die Debug-Box schreiben
+				txtViewportCoords.Text = string.Format("X: {0:F2} | Y: {1:F2}", x, y);
 
-                viewport.Camera.Position = new Vector3(settingsCoords.Take(3).ToArray()).ToPoint3D();
-                viewport.Camera.LookDirection = new Vector3(settingsCoords.Skip(3).Take(3).ToArray()).ToVector3D();  // deHarro, 2024-09-08, nur 3 Werte für Vektor
-            }
-            catch
-            {
-                ButtonResetViewport_Click(null, null);
-            }
-            List<double> coords = new List<double>();
-            coords.AddRange(new Vector3(viewport.Camera.Position).Array);                           // with getting from above position is retained
-            coords.AddRange(new Vector3(viewport.Camera.LookDirection).Array);                      // with getting from above lookdir is retained
-            coords.AddRange(new Vector3(viewport.Camera.UpDirection).Array);                        // store new UpDirection
+				// 2. Abstand berechnen, falls ein Punkt davor existiert
+				if (lastClickPoint.HasValue)
+				{
+					double dx = x - lastClickPoint.Value.X;
+					double dy = y - lastClickPoint.Value.Y;
+					double dist = Math.Sqrt(dx * dx + dy * dy);
 
-            Properties.Settings.Default.ViewPortPos = string.Join(";", coords.Select(d => d.ToString()));
+					// Anzeige der Gesamtdistanz und der Einzelachsen (Betrag genommen für Abstände)
+					txtViewportDist.Text = string.Format("Abstand: {0:F3} mm (dX: {1:F2} | dY: {2:F2})",
+														  dist, Math.Abs(dx), Math.Abs(dy));
+				}
+				else
+				{
+					txtViewportDist.Text = "Abstand: Startpunkt gesetzt";
+				}
 
-            // now restore temporarily saved viewport look direction and camera position
-            viewport.Camera.LookDirection = new System.Windows.Media.Media3D.Vector3D(LookDirSave.X, LookDirSave.Y, LookDirSave.Z);
-            viewport.Camera.Position = new System.Windows.Media.Media3D.Point3D(CamPosSave.X, CamPosSave.Y, CamPosSave.Z);
-        }
+				// Punkt für die nächste Messung merken
+				lastClickPoint = hitPoint;
 
-        // ----- ButtonRestoreViewport ---------------------------------------------------
-        private void ButtonRestoreViewport_Click(object sender, RoutedEventArgs e)
+				// Die G-Code Suche rufen wir hier nur auf, wenn wir sie 
+				// sicher performant programmiert haben. Vorerst auslassen:
+				// JumpToNearestGCodeLine(hitPoint.Value);
+			}
+		}
+
+		private void JumpToNearestGCodeLine(System.Windows.Media.Media3D.Point3D clickPoint)
+		{
+			int globalIndex = 0;
+			int bestGlobalIndex = -1;
+			double minDistance = 0.5; // 0.5mm Toleranz für Platinen-Präzision
+
+			foreach (var layer in AllLayers)
+			{
+				if (!layer.IsActive)
+				{
+					// Auch wenn der Layer inaktiv ist, müssen wir seine Zeilen mitzählen,
+					// damit der Index in der Hauptliste am Ende stimmt!
+					globalIndex += layer.Content.Length;
+					continue;
+				}
+
+				for (int i = 0; i < layer.Content.Length; i++)
+				{
+					string line = layer.Content[i];
+
+					// Wir suchen im Text der Zeile nach X und Y Werten
+					// Das ist viel schneller als die UI-Elemente zu fragen!
+					if (TryParseGCodeCoords(line, out double x, out double y))
+					{
+						double dx = clickPoint.X - x;
+						double dy = clickPoint.Y - y;
+						double d = Math.Sqrt(dx * dx + dy * dy);
+
+						if (d < minDistance)
+						{
+							minDistance = d;
+							bestGlobalIndex = globalIndex + i;
+						}
+					}
+				}
+				globalIndex += layer.Content.Length;
+			}
+
+			if (bestGlobalIndex != -1)
+			{
+				ListViewFile.SelectedIndex = bestGlobalIndex;
+				ListViewFile.ScrollIntoView(ListViewFile.SelectedItem);
+			}
+		}
+
+		// Hilfsfunktion, um X/Y aus einem G-Code String zu fischen (sehr performant)
+		private bool TryParseGCodeCoords(string line, out double x, out double y)
+		{
+			x = 0; y = 0;
+			if (!line.Contains("X") && !line.Contains("Y")) return false;
+
+			try
+			{
+				var parts = line.Split(' ');
+				foreach (var p in parts)
+				{
+					if (p.StartsWith("X")) double.TryParse(p.Substring(1), System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out x);
+					if (p.StartsWith("Y")) double.TryParse(p.Substring(1), System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out y);
+				}
+				return true;
+			}
+			catch { return false; }
+		}
+
+		/*
+				private void JumpToNearestGCodeLine(System.Windows.Media.Media3D.Point3D clickPoint)
+				{
+					int bestIndex = -1;
+					double minDistance = 1.0; // 1mm Toleranz
+
+					// Wir gehen durch alle Einträge, die gerade in deiner ListViewFile angezeigt werden
+					for (int i = 0; i < ListViewFile.Items.Count; i++)
+					{
+						// OCP speichert hier oft Objekte vom Typ 'GCodeLine'
+						var line = ListViewFile.Items[i];
+
+						// Jetzt kommt der "Hack": Wir versuchen die Koordinaten aus dem Objekt zu lesen
+						// Da ich die genaue Klasse nicht kenne, nutzen wir eine vorsichtige Prüfung:
+						dynamic cmd = line;
+						try
+						{
+							double dx = clickPoint.X - (double)cmd.X;
+							double dy = clickPoint.Y - (double)cmd.Y;
+							double d = Math.Sqrt(dx * dx + dy * dy);
+
+							if (d < minDistance)
+							{
+								minDistance = d;
+								bestIndex = i;
+							}
+						}
+						catch { // Falls das Objekt kein X/Y hat, ignorieren wir es
+						}
+					}
+
+					if (bestIndex != -1)
+					{
+						ListViewFile.SelectedIndex = bestIndex;
+						ListViewFile.ScrollIntoView(ListViewFile.SelectedItem);
+					}
+				}
+		*/
+
+		// ----- ButtonLayFlatViewport ---------------------------------------------------
+		private void ButtonLayFlatViewport_Click(object sender, RoutedEventArgs e)
+		{
+			// 1. Blickrichtung (Dein funktionierender Code)
+			viewport.Camera.Position = new System.Windows.Media.Media3D.Point3D(0, 0, viewport.Camera.Position.Z);
+			viewport.Camera.LookDirection = new System.Windows.Media.Media3D.Vector3D(0, 1, viewport.Camera.LookDirection.Z);
+
+			// 2. Bounding Box ohne "FindBounds" berechnen
+			var totalBounds = System.Windows.Media.Media3D.Rect3D.Empty;
+
+			foreach (var child in viewport.Children)
+			{
+				// Wir suchen gezielt nach den Linien des G-Codes
+				// In OCP sind das oft LinesVisual3D
+				if (child is HelixToolkit.Wpf.LinesVisual3D lines)
+				{
+					// Wir ignorieren die Maschinengrenzen anhand ihrer Farbe oder ihres Namens
+					// Die Maschinengrenzen sind in OCP oft Grau oder Weiß. 
+					// Wenn die G-Code-Linien eine andere Farbe haben, können wir filtern:
+					if (lines.Color == System.Windows.Media.Colors.LightGray) continue;
+
+					// Falls das Objekt eine Content-Eigenschaft hat, nehmen wir deren Bounds
+					var bounds = lines.Content.Bounds;
+					if (!bounds.IsEmpty)
+						totalBounds.Union(bounds);
+				}
+			}
+
+			// 3. Zoom ausführen
+			if (!totalBounds.IsEmpty)
+			{
+				// Wir berechnen 15% Puffer
+				double margin = 0.15;
+				double offsetX = totalBounds.SizeX * margin;
+				double offsetY = totalBounds.SizeY * margin;
+
+				// Wir erstellen eine neue, größere Box basierend auf der alten
+				var paddedBounds = new System.Windows.Media.Media3D.Rect3D(
+					totalBounds.X - offsetX / 2,
+					totalBounds.Y - offsetY / 2,
+					totalBounds.Z,
+					totalBounds.SizeX + offsetX,
+					totalBounds.SizeY + offsetY,
+					totalBounds.SizeZ
+				);
+
+				// Jetzt zoomen wir auf die gepufferte Box
+				viewport.ZoomExtents(paddedBounds, 500);
+			}
+			else
+			{
+				// Fallback: Wenn wir nichts spezifisches finden, nimm alles
+				viewport.ZoomExtents();
+			}
+
+			isViewFlat = true;
+			txtViewportCoords.Foreground = System.Windows.Media.Brushes.DarkGreen;
+		}
+
+		// Wird automatisch aufgerufen, sobald du die Kamera mit der Maus drehst/bewegst
+		private void viewport_CameraChanged(object sender, RoutedEventArgs e)
+		{
+			if (txtViewportCoords == null || viewport.Camera == null) return;
+
+			var look = viewport.Camera.LookDirection;
+
+			// Normalerweise ist die Ansicht flach, wenn X fast 0 ist.
+			// Wir erlauben jetzt eine massive Abweichung. 
+			// Erst wenn die Kamera wirklich spürbar gekippt wird, schalten wir ab.
+			bool stillFlat = Math.Abs(look.X) < 0.2;
+
+			if (stillFlat)
+			{
+				isViewFlat = true;
+				txtViewportCoords.Foreground = System.Windows.Media.Brushes.DarkGreen;
+				// WICHTIG: Hier keinen Text überschreiben, sonst löscht jeder Zoom die Zahlen!
+			}
+			else
+			{
+				isViewFlat = false;
+				txtViewportCoords.Foreground = System.Windows.Media.Brushes.Gray;
+				txtViewportCoords.Text = "X: --- | Y: --- (3D-Modus)";
+				txtViewportDist.Text = "Abstand: ---";
+			}
+		}
+
+		// ----- ButtonRotateOrigin ---------------------------------------------------
+		private void ButtonRotateOrigin_Click(object sender, RoutedEventArgs e)                     // deHarro, 2024-09-11, Origin im Viewport passend zur Fräse ausrichten
+		{
+			{   // do the rotating CCW
+				if (viewport.Camera.LookDirection.X == 0 && viewport.Camera.LookDirection.Y == 1 /*&& viewport.Camera.LookDirection.Z == 1*/)       // (0, 0, z) default
+				{
+					viewport.Camera.LookDirection = new System.Windows.Media.Media3D.Vector3D(1, 0, viewport.Camera.LookDirection.Z);
+				}
+				else if (viewport.Camera.LookDirection.X == 1 && viewport.Camera.LookDirection.Y == 0 /*&& viewport.Camera.LookDirection.Z == 1*/)  // (1, 0, z) my default 
+				{
+					viewport.Camera.LookDirection = new System.Windows.Media.Media3D.Vector3D(0, -1, viewport.Camera.LookDirection.Z);
+				}
+				else if (viewport.Camera.LookDirection.X == 0 && viewport.Camera.LookDirection.Y == -1 /*&& viewport.Camera.LookDirection.Z == 1*/) // (0, -1, z) other
+				{
+					viewport.Camera.LookDirection = new System.Windows.Media.Media3D.Vector3D(-1, 0, viewport.Camera.LookDirection.Z);
+				}
+				else if (viewport.Camera.LookDirection.X == -1 && viewport.Camera.LookDirection.Y == 0 /*&& viewport.Camera.LookDirection.Z == 1*/) // (-1, 0, z) other       {
+				{
+					viewport.Camera.LookDirection = new System.Windows.Media.Media3D.Vector3D(0, 1, viewport.Camera.LookDirection.Z);
+				}
+			}   // \do the rotating CCW
+
+			// temporarily save current viewport look direction and camera position
+			System.Windows.Media.Media3D.Vector3D LookDirSave = new System.Windows.Media.Media3D.Vector3D(viewport.Camera.LookDirection.X, viewport.Camera.LookDirection.Y, viewport.Camera.LookDirection.Z);
+			System.Windows.Media.Media3D.Vector3D CamPosSave = new System.Windows.Media.Media3D.Vector3D(viewport.Camera.Position.X, viewport.Camera.Position.Y, viewport.Camera.Position.Z);
+
+			// get currently stored viewport settings
+			string[] scoords = Properties.Settings.Default.ViewPortPos.Split(';');
+			try
+			{
+				IEnumerable<double> settingsCoords = scoords.Select(s => double.Parse(s));
+
+				viewport.Camera.Position = new Vector3(settingsCoords.Take(3).ToArray()).ToPoint3D();
+				viewport.Camera.LookDirection = new Vector3(settingsCoords.Skip(3).Take(3).ToArray()).ToVector3D();  // deHarro, 2024-09-08, nur 3 Werte für Vektor
+			}
+			catch
+			{
+				ButtonResetViewport_Click(null, null);
+			}
+			List<double> coords = new List<double>();
+			coords.AddRange(new Vector3(viewport.Camera.Position).Array);                           // with getting from above position is retained
+			coords.AddRange(new Vector3(viewport.Camera.LookDirection).Array);                      // with getting from above lookdir is retained
+			coords.AddRange(new Vector3(viewport.Camera.UpDirection).Array);                        // store new UpDirection
+
+			Properties.Settings.Default.ViewPortPos = string.Join(";", coords.Select(d => d.ToString()));
+
+			// now restore temporarily saved viewport look direction and camera position
+			viewport.Camera.LookDirection = new System.Windows.Media.Media3D.Vector3D(LookDirSave.X, LookDirSave.Y, LookDirSave.Z);
+			viewport.Camera.Position = new System.Windows.Media.Media3D.Point3D(CamPosSave.X, CamPosSave.Y, CamPosSave.Z);
+		}
+
+		// ----- ButtonRestoreViewport ---------------------------------------------------
+		private void ButtonRestoreViewport_Click(object sender, RoutedEventArgs e)
 		{
 			string[] scoords = Properties.Settings.Default.ViewPortPos.Split(';');
 
@@ -449,17 +696,17 @@ namespace OpenCNCPilot
 			{
 				IEnumerable<double> coords = scoords.Select(s => double.Parse(s));
 
-				viewport.Camera.Position        = new Vector3(coords.Take(3).ToArray()).ToPoint3D();
-                viewport.Camera.LookDirection   = new Vector3(coords.Skip(3).Take(3).ToArray()).ToVector3D();  // deHarro, 2024-09-08, nur 3 Werte für Vektor
-            }
-            catch
+				viewport.Camera.Position = new Vector3(coords.Take(3).ToArray()).ToPoint3D();
+				viewport.Camera.LookDirection = new Vector3(coords.Skip(3).Take(3).ToArray()).ToVector3D();  // deHarro, 2024-09-08, nur 3 Werte für Vektor
+			}
+			catch
 			{
 				ButtonResetViewport_Click(null, null);
 			}
 		}
 
-        // ----- ButtonSaveViewport ---------------------------------------------------
-        private void ButtonSaveViewport_Click(object sender, RoutedEventArgs e)
+		// ----- ButtonSaveViewport ---------------------------------------------------
+		private void ButtonSaveViewport_Click(object sender, RoutedEventArgs e)
 		{
 			List<double> coords = new List<double>();
 

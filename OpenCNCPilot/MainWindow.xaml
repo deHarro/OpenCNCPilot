@@ -12,12 +12,13 @@
 		DragEnter="Window_DragEnter"
 		DataContext="{Binding RelativeSource={RelativeSource Self}}"
 		PreviewKeyDown="Window_PreviewKeyDown"
-		Title="{Binding WindowTitle,Mode=OneWay}" Height="{util:SettingBinding WindowHeight}" Width="1400" Closing="Window_Closing">
+        KeyDown="Window_KeyDown"
+		Title="{Binding WindowTitle,Mode=OneWay}" Height="1005.5" Width="1400" Closing="Window_Closing">
     <Window.Resources>
         <ResourceDictionary Source="MainWindow.Resources.xaml"/>
     </Window.Resources>
     <Grid>
-        <Grid Panel.ZIndex="1">
+        <Grid Panel.ZIndex="1" Grid.ColumnSpan="5">
             <Border Style="{StaticResource stylePanelOut}" VerticalAlignment="Top" HorizontalAlignment="Center">
                 <StackPanel>
                     <StackPanel Orientation="Horizontal">
@@ -49,7 +50,7 @@
                     </StackPanel>
                 </StackPanel>
             </Border>
-            <StackPanel Orientation="Vertical" HorizontalAlignment="Left">
+            <StackPanel Orientation="Vertical" HorizontalAlignment="Left" Margin="0,0,0,-608">
                 <Border Style="{StaticResource stylePanelOut}">
                     <Expander Header="File" Width="Auto" IsExpanded="{util:SettingBinding FileExpanderOpen}">
                         <Grid Height="260">
@@ -62,7 +63,8 @@
                                 <Button Name="ButtonFileOpen" Click="ButtonOpen_Click" Content="Open" Style="{StaticResource styleButton}" Margin="0,0,0,0"  Padding="3,0"/>
                                 <Button Name="ButtonFileSave" Click="ButtonSave_Click" Content="Save" Style="{StaticResource styleButton}" Margin="4,0,0,0" Padding="3,0"/>
                                 <Button Name="ButtonFileClear" Click="ButtonClear_Click" Content="Clear" Style="{StaticResource styleButton}" Margin="4,0,0,0" Padding="3,0"/>
-                                <Button Name="ButtonFileAdd" Click="ButtonAddLayer_Click" IsEnabled="False" Content="Add Layer" Style="{StaticResource styleButton}" Margin="4,0,0,0" Padding="5,0"/>
+                                <Button Name="ButtonFileAdd" Click="ButtonAddLayer_Click" IsEnabled="False" Content="Add Layer" Style="{StaticResource styleButton}" Margin="4,0,0,0" Padding="5,0" ToolTip="Load additional layers from disk and superimpose them with already loaded layers."/>
+                                <Button Name="ButtonReloadAll" Click="ButtonReloadAll_Click" IsEnabled="False" Content="Reload" Style="{StaticResource styleButton}" Margin="4,0,0,0" Padding="5,0" ToolTip="Reload all files from disk."/>
 
                                 <TextBlock Margin="8,4,0,0" VerticalAlignment="Center">
                                     <Run Name="RunFilePosition" Text="0"/>
@@ -72,12 +74,12 @@
                             </StackPanel>
                             <ListView Name="ListViewFile" Margin="5,37,0,53" ScrollViewer.HorizontalScrollBarVisibility="Auto" Background="Transparent" Grid.ColumnSpan="2"/>
 
-                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Left" Margin="5,5,0,5">                                                            
-                            <Button Name="ButtonFileStart" Click="ButtonFileStart_Click" Content="Start" Style="{StaticResource styleButton}" HorizontalAlignment="Left" Margin="0,0,5,20" Height="23" VerticalAlignment="Bottom" Width="33" Grid.ColumnSpan="2"/>
-                            <Button Name="ButtonFilePause" Click="ButtonFilePause_Click" Content="Pause" Style="{StaticResource styleButton}" HorizontalAlignment="Left" Margin="0,0,5,20" Height="23" VerticalAlignment="Bottom" Width="40" Grid.Column="1"/>
-                            <Button Name="ButtonFileGoto" Click="ButtonFileGoto_Click" Content="Go To" Style="{StaticResource styleButton}" HorizontalAlignment="Left" Margin="0,0,5,20" Height="23" VerticalAlignment="Bottom" Width="40" Grid.Column="1"/>
-                            <CheckBox Name="CheckBoxPauseOnM0" Content="Pause" ToolTip="Pause the Program on M0/M1/M30" IsChecked="{util:SettingBinding PauseFileOnHold}" HorizontalAlignment="Left" Margin="0,0,5,15" Height="23" VerticalAlignment="Bottom" Width="51" Grid.Column="1"/>
-                                
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Left" Margin="5,5,0,5">
+                                <Button Name="ButtonFileStart" Click="ButtonFileStart_Click" Content="Start" Style="{StaticResource styleButton}" HorizontalAlignment="Left" Margin="0,0,5,20" Height="23" VerticalAlignment="Bottom" Width="33" Grid.ColumnSpan="2"/>
+                                <Button Name="ButtonFilePause" Click="ButtonFilePause_Click" Content="Pause" Style="{StaticResource styleButton}" HorizontalAlignment="Left" Margin="0,0,5,20" Height="23" VerticalAlignment="Bottom" Width="40" Grid.Column="1"/>
+                                <Button Name="ButtonFileGoto" Click="ButtonFileGoto_Click" Content="Go To" Style="{StaticResource styleButton}" HorizontalAlignment="Left" Margin="0,0,5,20" Height="23" VerticalAlignment="Bottom" Width="40" Grid.Column="1"/>
+                                <CheckBox Name="CheckBoxPauseOnM0" Content="Pause" ToolTip="Pause the Program on M0/M1/M30" IsChecked="{util:SettingBinding PauseFileOnHold}" HorizontalAlignment="Left" Margin="0,0,5,15" Height="23" VerticalAlignment="Bottom" Width="51" Grid.Column="1"/>
+
                             </StackPanel>
 
                             <TextBlock  VerticalAlignment="Bottom" Margin="10,0,0,4" HorizontalAlignment="Left" Height="16" Width="150" Grid.ColumnSpan="2">
@@ -91,32 +93,33 @@
                 </Border>
 
                 <Border Name="LayerPanel" 
-                    Style="{StaticResource stylePanelOut}" 
-                    Visibility="Visible">
-
+        Style="{StaticResource stylePanelOut}" 
+        Visibility="Collapsed"
+        HorizontalAlignment="Left">
                     <Expander Style="{StaticResource {x:Type Expander}}"
-                         IsExpanded="True">
-
+              IsExpanded="True"
+              HorizontalAlignment="Left">
                         <Expander.Header>
-                            <DockPanel HorizontalAlignment="Stretch" 
-                            Width="{Binding ActualWidth, RelativeSource={RelativeSource AncestorType=ContentPresenter}}">
+                            <Grid HorizontalAlignment="Left">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
 
-                            <Button DockPanel.Dock="Right" 
-                                Content="🔄" 
-                                Click="ButtonReloadAll_Click" 
-                                VerticalAlignment="Top" 
-                                Width="23" Height="21" 
-                                FontSize="14" 
-                                Padding="0"
-                                ToolTip="Reload all files from disk"
-                                Background="#F0F0F0"
-                                Margin="10,0,0,0" />
-
-                                <TextBlock Text="Combined Files (Layer)&#160;&#160;&#160;" 
-                                    Margin="0,0,-10,0"
-                                    VerticalAlignment="Center" 
-                                    FontWeight="Bold" Width="168" />
-                            </DockPanel>
+                                <TextBlock Grid.Column="0"
+                           Text="Combined Files (Layer)" 
+                           VerticalAlignment="Center" 
+                           FontWeight="Bold"
+                           Margin="0,0,10,0" />
+                                <Button Grid.Column="1"
+                        Content="🔄" 
+                        Click="ButtonReloadAll_Click" 
+                        Width="23" Height="21" 
+                        FontSize="14" 
+                        Padding="0"
+                        ToolTip="Reload all files from disk"
+                        Background="#F0F0F0" />
+                            </Grid>
                         </Expander.Header>
 
                         <ItemsControl Name="ListViewLayers" Margin="5,2,5,5">
@@ -162,7 +165,7 @@
                         </ItemsControl>
                     </Expander>
                 </Border>
-                
+
                 <Border Style="{StaticResource stylePanelOut}">
                     <Expander Header="Edit" IsExpanded="{util:SettingBinding EditExpanderOpen}">
                         <WrapPanel Width="180">
@@ -398,7 +401,7 @@
                                         <Hyperlink RequestNavigate="Hyperlink_RequestNavigate" NavigateUri="https://github.com/deHarro/OpenCNCPilot" TextDecorations="None">Mod: deHarro</Hyperlink>
                                     </TextBlock>
 
-                                    <TextBlock Text=" - v1.4, 2026-03-04" 
+                                    <TextBlock Text=" - v1.6, 2026-03-07" 
                                        Foreground="Gray" 
                                        FontSize="10" />
                                 </StackPanel>
@@ -412,6 +415,8 @@
                                                 <TextBlock Text="v1.2: Layer-Stacking"/>
                                                 <TextBlock Text="v1.3: GCode-Filter"/>
                                                 <TextBlock Text="v1.4: Sort Layerlist"/>
+                                                <TextBlock Text="v1.5: Reload Files/Layers"/>
+                                                <TextBlock Text="v1.6: Distance in Viewport"/>
                                             </StackPanel>
                                         </TextBlock>
                                     </ToolTip>
@@ -446,7 +451,7 @@
                                         <TextBlock FlowDirection="LeftToRight">
                                             Rotate origin to match orientation of mill.
                                             <LineBreak />
-                                            Issue "Lay flat 3D Viewport" first
+                                            Issue "Lay flat 3D Viewport" first!
                                         </TextBlock>
                                     </Button.ToolTip>
                                 </Button>
@@ -465,6 +470,25 @@
                                     </Style>
                                 </CheckBox.Resources>
                             </CheckBox>
+
+                            <Separator Margin="10,5,10,5" Background="Gray" Opacity="0.3"/>
+                            <TextBlock Name="txtViewportCoords" 
+                                Text="X: --- | Y: ---" 
+                                FontWeight="Bold"
+                                FontFamily="Consolas" 
+                                FontSize="11" 
+                                Margin="12,0,0,5" 
+                                Foreground="Gray"/>
+
+                                                <TextBlock Name="txtViewportDist" 
+                                Text="Abstand: ---" 
+                                FontWeight="Bold"
+                                FontFamily="Consolas" 
+                                FontSize="11" 
+                                Margin="12,0,0,10" 
+                                Foreground="#FF0066CC"/>
+
+
                         </StackPanel>
                     </Expander>
                 </Border>
@@ -478,13 +502,21 @@
                 </ListBox.ItemsPanel>
             </ListBox>
         </Grid>
-        <StackPanel Panel.ZIndex="2" VerticalAlignment="Bottom" HorizontalAlignment="Center" Orientation="Horizontal" Margin="446,0,420,0">
+        <StackPanel Panel.ZIndex="2" VerticalAlignment="Bottom" HorizontalAlignment="Center" Orientation="Horizontal" Margin="-8,0,8,0" Grid.Column="2" Height="0" Width="0">
             <Label Name="LabelStateProbe" Content="Probe" FontWeight="ExtraBold" FontSize="40" Foreground="Red" Visibility="Collapsed"/>
             <Label Name="LabelStateLimitX" Content="LimitX" FontWeight="ExtraBold" FontSize="40" Foreground="Red" Visibility="Collapsed"/>
             <Label Name="LabelStateLimitY" Content="LimitY" FontWeight="ExtraBold" FontSize="40" Foreground="Red" Visibility="Collapsed"/>
             <Label Name="LabelStateLimitZ" Content="LimitZ" FontWeight="ExtraBold" FontSize="40" Foreground="Red" Visibility="Collapsed"/>
         </StackPanel>
-        <h:HelixViewport3D Name="viewport" ShowCameraInfo="{util:SettingBinding ShowCameraInfo}" ShowViewCube="{util:SettingBinding ShowViewCube}" Panel.ZIndex="0" PreviewKeyDown="viewport_PreviewKeyDown" Grid.ColumnSpan="2" ZoomAroundMouseDownPoint="true">
+        <h:HelixViewport3D Name="viewport" 
+                   MouseDown="viewport_MouseDown" 
+                   CameraChanged="viewport_CameraChanged"
+                   ShowCameraInfo="{util:SettingBinding ShowCameraInfo}" 
+                   ShowViewCube="{util:SettingBinding ShowViewCube}" 
+                   Panel.ZIndex="0" 
+                   PreviewKeyDown="viewport_PreviewKeyDown" 
+                   Grid.ColumnSpan="5" 
+                   ZoomAroundMouseDownPoint="true">
             <h:HelixViewport3D.Camera>
                 <PerspectiveCamera
 					Position="50, -150, 250"
