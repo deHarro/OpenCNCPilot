@@ -83,7 +83,6 @@ namespace OpenCNCPilot
 				// 1. Liste leeren für Neustart
 				AllLayers.Clear();
 
-				// 2. Fehler CS1503 (Zeile 79) lösen: Paket erstellen
 				AllLayers.Add(new GCodeLayer
 				{
 					Name = System.IO.Path.GetFileName(openFileDialogGCode.FileName),
@@ -95,7 +94,6 @@ namespace OpenCNCPilot
 				// 3. UI updaten
 				UpdateLayerDisplay();
 
-				// 4. Fehler CS1503 (Zeile 85) lösen: Wir rufen einfach unsere neue Sammel-Logik auf
 				LayerCheckBox_Click(null, null);
 
 				CurrentFileName = System.IO.Path.GetFileName(openFileDialogGCode.FileName);
