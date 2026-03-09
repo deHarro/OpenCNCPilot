@@ -52,14 +52,14 @@
             </Border>
             <StackPanel Orientation="Vertical" HorizontalAlignment="Left" Margin="0,0,0,-608">
                 <Border Style="{StaticResource stylePanelOut}">
-                    <Expander Header="File" Width="Auto" IsExpanded="{util:SettingBinding FileExpanderOpen}">
+                    <Expander x:Name="ExpanderFile" Header="File" Width="Auto" IsExpanded="{util:SettingBinding FileExpanderOpen}">
                         <Grid Height="260">
                             <Grid.ColumnDefinitions>
                                 <!-- made listbox width adapt to line length, deHarro, 2024-08-27 -->
-                                <ColumnDefinition Width="Auto" MinWidth="189"/>
-                                <ColumnDefinition Width="0"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
                             </Grid.ColumnDefinitions>
-                            <StackPanel Orientation="Horizontal" VerticalAlignment="Top" Margin="5,5,0,0" Grid.ColumnSpan="2">
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Top" Margin="5,5,0,0" Grid.ColumnSpan="3">
                                 <Button Name="ButtonFileOpen" Click="ButtonOpen_Click" Content="Open" Style="{StaticResource styleButton}" Margin="0,0,0,0"  Padding="3,0"/>
                                 <Button Name="ButtonFileSave" Click="ButtonSave_Click" Content="Save" Style="{StaticResource styleButton}" Margin="4,0,0,0" Padding="3,0"/>
                                 <Button Name="ButtonFileClear" Click="ButtonClear_Click" Content="Clear" Style="{StaticResource styleButton}" Margin="4,0,0,0" Padding="3,0"/>
@@ -72,9 +72,9 @@
                                     <Run Name="RunFileLength"  Text="0"/>
                                 </TextBlock>
                             </StackPanel>
-                            <ListView Name="ListViewFile" Margin="5,37,0,53" ScrollViewer.HorizontalScrollBarVisibility="Auto" Background="Transparent" Grid.ColumnSpan="2"/>
+                            <ListView Name="ListViewFile" Margin="5,37,0,53" ScrollViewer.HorizontalScrollBarVisibility="Auto" Background="Transparent" Grid.ColumnSpan="3"/>
 
-                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Left" Margin="5,5,0,5">
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Left" Margin="5,5,0,5" Grid.ColumnSpan="3">
                                 <Button Name="ButtonFileStart" Click="ButtonFileStart_Click" Content="Start" Style="{StaticResource styleButton}" HorizontalAlignment="Left" Margin="0,0,5,20" Height="23" VerticalAlignment="Bottom" Width="33" Grid.ColumnSpan="2"/>
                                 <Button Name="ButtonFilePause" Click="ButtonFilePause_Click" Content="Pause" Style="{StaticResource styleButton}" HorizontalAlignment="Left" Margin="0,0,5,20" Height="23" VerticalAlignment="Bottom" Width="40" Grid.Column="1"/>
                                 <Button Name="ButtonFileGoto" Click="ButtonFileGoto_Click" Content="Go To" Style="{StaticResource styleButton}" HorizontalAlignment="Left" Margin="0,0,5,20" Height="23" VerticalAlignment="Bottom" Width="40" Grid.Column="1"/>
@@ -82,7 +82,7 @@
 
                             </StackPanel>
 
-                            <TextBlock  VerticalAlignment="Bottom" Margin="10,0,0,4" HorizontalAlignment="Left" Height="16" Width="150" Grid.ColumnSpan="2">
+                            <TextBlock  VerticalAlignment="Bottom" Margin="2,0,0,4" HorizontalAlignment="Left" Height="16" Width="150" Grid.ColumnSpan="2" Grid.Column="1">
 								<Run Text="Runtime:"/>
 								<Run Name="RunFileRunTime" Text="00:00:00"/>
 								<Run Text="/"/>
@@ -401,7 +401,7 @@
                                         <Hyperlink RequestNavigate="Hyperlink_RequestNavigate" NavigateUri="https://github.com/deHarro/OpenCNCPilot" TextDecorations="None">Mod: deHarro</Hyperlink>
                                     </TextBlock>
 
-                                    <TextBlock Text=" - v1.6, 2026-03-07" 
+                                    <TextBlock Text=" - v1.7, 2026-03-09" 
                                        Foreground="Gray" 
                                        FontSize="10" />
                                 </StackPanel>
@@ -417,6 +417,13 @@
                                                 <TextBlock Text="v1.4: Sort Layerlist"/>
                                                 <TextBlock Text="v1.5: Reload Files/Layers"/>
                                                 <TextBlock Text="v1.6: Distance in Viewport"/>
+                                                <TextBlock> 
+                                                    v1.7:
+                                                    <LineBreak />
+                                                    Jump to G-Code line, added marker,
+                                                    <LineBreak />
+                                                    Distances corrected, added markers
+                                                </TextBlock>
                                             </StackPanel>
                                         </TextBlock>
                                     </ToolTip>
@@ -425,6 +432,83 @@
                         </StackPanel>
                     </Expander>
                 </Border>
+
+                <Border Style="{StaticResource stylePanelOut}">
+                    <Expander Header="Inspection &amp; Measurement" 
+                        x:Name="ExpanderMeasurement" 
+                        IsExpanded="True" 
+                        Margin="2" 
+                        FlowDirection="LeftToRight"
+                        Expanded="ExpanderMeasure_Expanded" 
+                        Collapsed="ExpanderMeasure_Collapsed"
+                        HorizontalContentAlignment="Stretch">
+
+                        <StackPanel Margin="5">
+
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+
+                                <ToggleButton x:Name="BtnLinkToFile" Background="Transparent"
+                                    Content="Link G-Code" 
+                                    Click="BtnLinkToFile_Click" 
+                                    Margin="0,0,2,0" 
+                                    ToolTip="Aktiviert Zeilen-Mapping und Lay-Flat"/>
+
+                                <ToggleButton x:Name="BtnMeasure" Background="Transparent"
+                                    Grid.Column="1"
+                                    Content="Measure" 
+                                    Click="BtnMeasure_Click" 
+                                    Margin="2,0,0,0" 
+                                    ToolTip="Abstände zwischen Punkten messen"/>
+                            </Grid>
+
+                            <Separator Margin="0,8,0,5" Background="#CCC"/>
+
+                            <StackPanel>
+                                <Label Content="Current / Picked Position:" Padding="0,2" FontSize="10" Foreground="#555"/>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBox x:Name="TxtPickedCoords" 
+                         Text="X: 0.000 Y: 0.000" 
+                         IsReadOnly="True" 
+                         FontFamily="Consolas"
+                         Background="#F8F8F8" 
+                         VerticalContentAlignment="Center"
+                         Padding="3"/>
+                                    <Button Grid.Column="1" 
+                        Content="Copy" 
+                        Width="40" 
+                        Margin="2,0,0,0" 
+                        Click="BtnCopyCoords_Click" 
+                        FontSize="10"/>
+                                </Grid>
+
+                                <Label Content="Calculated Distance:" Padding="0,5,0,2" FontSize="10" Foreground="#555"/>
+                                <TextBox x:Name="TxtDistance" 
+                     Text="---" 
+                     IsReadOnly="True" 
+                     FontFamily="Consolas"
+                     Background="#F8F8F8" 
+                     Padding="3"/>
+
+                                <Button x:Name="BtnSendToManual" 
+                    Content="Send to Manual Command" 
+                    Click="BtnSendToManual_Click" 
+                    Margin="0,8,0,2" 
+                    Height="28"
+                    FontWeight="Bold"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </Expander>
+                </Border>
+
+
                 <Border Style="{StaticResource stylePanelOut}">
                     <Expander Header="Debug" IsExpanded="{util:SettingBinding DebugExpanderOpen}">
                         <StackPanel HorizontalAlignment="Left" Margin="0,0,0,5">
@@ -470,24 +554,6 @@
                                     </Style>
                                 </CheckBox.Resources>
                             </CheckBox>
-
-                            <Separator Margin="10,5,10,5" Background="Gray" Opacity="0.3"/>
-                            <TextBlock Name="txtViewportCoords" 
-                                Text="X: --- | Y: ---" 
-                                FontWeight="Bold"
-                                FontFamily="Consolas" 
-                                FontSize="11" 
-                                Margin="12,0,0,5" 
-                                Foreground="Gray"/>
-
-                                                <TextBlock Name="txtViewportDist" 
-                                Text="Abstand: ---" 
-                                FontWeight="Bold"
-                                FontFamily="Consolas" 
-                                FontSize="11" 
-                                Margin="12,0,0,10" 
-                                Foreground="#FF0066CC"/>
-
 
                         </StackPanel>
                     </Expander>

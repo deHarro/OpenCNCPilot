@@ -12,7 +12,11 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Interop;
 using System.Collections.ObjectModel;
-using System.ComponentModel;
+//using System.ComponentModel;
+using System.Windows.Input;         // Für MouseButtonEventArgs
+using System.Windows.Media;         // Für VisualTreeHelper / HitTest
+using System.Windows.Media.Media3D;  // Für Point3D und RayMeshGeometry3DHitTestResult
+using HelixToolkit.Wpf;               // Falls du noch Helix-Typen nutzt
 
 namespace OpenCNCPilot
 {
@@ -27,8 +31,16 @@ namespace OpenCNCPilot
 
 		ObservableCollection<GCodeLayer> AllLayers = new ObservableCollection<GCodeLayer>();
 
-		System.Windows.Media.Media3D.Point3D? lastClickPoint = null;
-		bool isViewFlat = false;			// wurde der Viewport flach auf X/Y-Ebene gelegt? (Button "Lay flat 3D Viewport" in der Debug-Box)
+		bool isViewFlat = false;            // wurde der Viewport flach auf X/Y-Ebene gelegt? (Button "Lay flat 3D Viewport" in der Debug-Box)
+
+		// Wir nutzen Visual3D als Basisklasse, da LinesVisual3D, QuadVisual3D und MeshElement3D alle davon erben.
+		private Dictionary<System.Windows.Media.Media3D.Visual3D, List<int>> _lineMapping = new Dictionary<System.Windows.Media.Media3D.Visual3D, List<int>>();
+
+		private Point3D? _firstMeasurePoint = null; // Speichert den ersten Klick für die Messung
+		private double _lastX, _lastY;              // Für den "Send to Manual"-Button
+
+		private HelixToolkit.Wpf.SphereVisual3D _clickMarker;
+		private SphereVisual3D _measureMarker;
 
 		GCodeFile ToolPath { get; set; } = GCodeFile.Empty;
 		HeightMap Map { get; set; }
@@ -52,12 +64,36 @@ namespace OpenCNCPilot
 			AppDomain.CurrentDomain.UnhandledException += UnhandledException;
 			InitializeComponent();
 
+			_clickMarker = new HelixToolkit.Wpf.SphereVisual3D { Radius = 0.5, Fill = System.Windows.Media.Brushes.Red };
+			viewport.Children.Add(_clickMarker);
+			_measureMarker = new HelixToolkit.Wpf.SphereVisual3D { Radius = 0.5, Fill = System.Windows.Media.Brushes.Blue };
+			viewport.Children.Add(_measureMarker);
+			// WICHTIG: Am Anfang unsichtbar machen, damit er nicht bei (0,0,0) im Modell schwebt
+			_measureMarker.Content = null;
+
+
 			// global variable for JoystickService, <deHarry, 2026-02-06>
 			_joystick = new OpenCNCPilot.Communication.JoystickService(
 				Properties.Settings.Default.JoystickPort,
 				Properties.Settings.Default.JoystickBaudrate,
 				machine, this
 			);
+
+			// Im Konstruktor von MainWindow.xaml.cs einfügen:
+			Properties.Settings.Default.PropertyChanged += (s, e) => {
+				if (e.PropertyName == "EnableCodePreview")
+				{
+					bool show = Properties.Settings.Default.EnableCodePreview;
+
+					// Wir schalten die Sichtbarkeit live um:
+					if (ModelRapid != null)
+						ModelRapid.IsRendering = show;
+
+					// Falls die Arcs (G2/G3) auch zur "Vorschau" gehören sollen:
+					// if (ModelArc != null)
+					//    ModelArc.IsRendering = show;
+				}
+			};
 
 			// automatically  open/close joystick port, <deHarry, 2026-02-06>
 			machine.ConnectionStateChanged += () =>
@@ -378,19 +414,28 @@ namespace OpenCNCPilot
 
 		private void Window_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
 		{
-			if (e.Key == System.Windows.Input.Key.Escape)
+			if (e.Key == Key.Escape)
 			{
-				// 1. Letzten Punkt löschen
-				lastClickPoint = null;
+				// 1. Laufende Messung abbrechen
+				_firstMeasurePoint = null;
 
-				// 2. Anzeige in der Debug-Box zurücksetzen
-				if (txtViewportDist != null)
+				// 2. Texte in der Mess-Box zurücksetzen (statt Debug-Fenster)
+				if (TxtDistance != null)
 				{
-					txtViewportDist.Text = "Messung zurückgesetzt";
+					TxtDistance.Text = "Messung abgebrochen";
 				}
 
-				// Optional: Falls du ein rotes Kreuz oder eine Markierung hättest, 
-				// könnte man sie hier auch ausblenden.
+				// Optional: Wenn beim ESC-Drücken auch die Koordinaten-Anzeige 
+				// geleert werden soll, nimm diese Zeile dazu:
+				if (TxtPickedCoords != null) TxtPickedCoords.Text = "X: 0.000 Y: 0.000";
+
+				// 3. Modus-Buttons optisch zurücksetzen (falls gewünscht)
+				// Wenn ESC auch den Modus komplett beenden soll:
+				// BtnMeasure.IsChecked = false;
+				// BtnMeasure.ClearValue(Control.BackgroundProperty);
+
+				// Wir markieren das Event als erledigt
+				e.Handled = true;
 			}
 		}
 
@@ -401,51 +446,526 @@ namespace OpenCNCPilot
 			viewport.Camera.UpDirection = new System.Windows.Media.Media3D.Vector3D(0, 0, 1);
 		}
 
-		private void viewport_MouseDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
+
+
+		private void UpdateButtonStyles()
 		{
-			// Sicherheitsabfrage: Nur messen, wenn wir flach draufschauen
-			if (!isViewFlat)
+			// Mess-Button: Kräftiges Blau wenn aktiv
+			if (BtnMeasure.IsChecked == true)
+				BtnMeasure.Background = Brushes.DeepSkyBlue;
+			else
+				BtnMeasure.ClearValue(Control.BackgroundProperty);
+
+			// Link-Button: Kräftiges Grün wenn aktiv
+			if (BtnLinkToFile.IsChecked == true)
+				BtnLinkToFile.Background = Brushes.LimeGreen;
+			else
+				BtnLinkToFile.ClearValue(Control.BackgroundProperty);
+		}
+
+		private void ExpanderMeasure_Expanded(object sender, RoutedEventArgs e)
+		{
+			// Punkt 3: Automatisch Lay-Flat ausführen
+			// Wir rufen die vorhandene OCP-Funktion auf, die die Kamera flach stellt
+			if (viewport != null)
 			{
-				txtViewportCoords.Text = "Nur in 'Lay Flat'-Ansicht möglich";
-				txtViewportDist.Text = "";
-				return;
+				ButtonLayFlatViewport_Click(null, null);
+			}
+		}
+
+		private void ExpanderMeasure_Collapsed(object sender, RoutedEventArgs e)
+		{
+			// Punkt 1: Buttons deaktivieren beim Schließen
+			if (BtnMeasure != null) BtnMeasure.IsChecked = false;
+			if (BtnLinkToFile != null) BtnLinkToFile.IsChecked = false;
+
+			// Farben zurücksetzen
+			BtnMeasure?.ClearValue(Control.BackgroundProperty);
+			BtnLinkToFile?.ClearValue(Control.BackgroundProperty);
+		}
+
+
+		private void BtnMeasure_Click(object sender, RoutedEventArgs e)
+		{
+			// Falls das UI den Button triggert, bevor die 3D-Welt bereit ist:
+			if (_measureMarker == null) return;
+
+			var btn = sender as System.Windows.Controls.Primitives.ToggleButton;
+			if (btn == null) return;
+
+			if (btn.IsChecked == true)
+			{
+				// FIX: Nur ausführen, wenn wir noch nicht im flachen Modus sind
+				if (!isViewFlat)
+				{
+					ButtonLayFlatViewport_Click(null, null);
+					isViewFlat = true; // Merken, dass die Ansicht jetzt ausgerichtet ist
+				}
+
+				BtnLinkToFile.IsChecked = false;
+				BtnLinkToFile.ClearValue(Control.BackgroundProperty);
+				btn.Background = Brushes.DodgerBlue;
+
+				_firstMeasurePoint = null;
+				TxtDistance.Text = "Click 1st point in viewport";
+			}
+			else
+			{
+				btn.ClearValue(Control.BackgroundProperty);
+				// Wenn der Button manuell deaktiviert wird, erlauben wir beim nächsten Mal wieder Lay-Flat
+				isViewFlat = false;
+				TxtDistance.Text = "---";
+			}
+		}
+
+		private void BtnLinkToFile_Click(object sender, RoutedEventArgs e)
+		{
+			var btn = sender as System.Windows.Controls.Primitives.ToggleButton;
+			if (btn == null) return;
+
+			if (btn.IsChecked == true)
+			{
+				if (!isViewFlat)
+				{
+					ButtonLayFlatViewport_Click(null, null);
+					isViewFlat = true; // Merken, dass die Ansicht jetzt ausgerichtet ist
+				}
+
+				BtnMeasure.IsChecked = false;
+				BtnMeasure.ClearValue(Control.BackgroundProperty);
+				TxtDistance.Text = "---"; // Mess-Status aufräumen
+
+				_measureMarker.Radius = 0; // "Unsichtbar" machen
+				_firstMeasurePoint = null;
+
+				// 2. Optik (Kräftiges Grün)
+				btn.Background = Brushes.LimeGreen;
+
+				// 3. Deine G-Code Logik
+				if (ExpanderFile != null) ExpanderFile.IsExpanded = true;
+
+				// Die Variable für die flache Ansicht setzen, falls du sie weiter nutzt
+				isViewFlat = true;
+			}
+			else
+			{
+				btn.ClearValue(Control.BackgroundProperty);
+				isViewFlat = false;
+			}
+		}
+
+		private void BtnCopyCoords_Click(object sender, RoutedEventArgs e)
+		{
+			if (!string.IsNullOrEmpty(TxtPickedCoords.Text))
+			{
+				// Wir kopieren den Inhalt der TextBox direkt ins Clipboard
+				System.Windows.Clipboard.SetText(TxtPickedCoords.Text);
+
+				// Kleiner User-Feedback-Trick: Den Text kurz selektieren
+				TxtPickedCoords.Focus();
+				TxtPickedCoords.SelectAll();
+			}
+		}
+
+		private void BtnSendToManual_Click(object sender, RoutedEventArgs e)
+		{
+			var culture = System.Globalization.CultureInfo.InvariantCulture;
+			double safetyZ = 5.0;
+
+			// 1. Die Befehle einzeln bauen (für die Punkt-Korrektur)
+			string cmdZ = string.Format(culture, "G0 Z{0:F3}", safetyZ);
+			string cmdXY = string.Format(culture, "G0 X{0:F3} Y{1:F3}", _lastX, _lastY);
+
+			// 2. Den kombinierten String für die Weiterverwendung erstellen
+			// Wir nutzen hier Environment.NewLine, damit es im Clipboard und in der Box sauber getrennt ist
+			string gcode = cmdZ + Environment.NewLine + cmdXY;
+
+			if (TextBoxManual != null)
+			{
+				// In die OCP Manual-Box schreiben
+				TextBoxManual.Text = gcode;
+				TextBoxManual.Focus();
+			}
+			else
+			{
+				// Falls die Box nicht da ist: Ab ins Clipboard (dein else-Zweig)
+				System.Windows.Clipboard.SetText(gcode);
+			}
+		}
+
+		private double? GetCoord(string line, char axis)
+		{
+			int idx = line.IndexOf(axis);
+			if (idx == -1) return null;
+
+			string s = "";
+			for (int i = idx + 1; i < line.Length; i++)
+			{
+				if (char.IsDigit(line[i]) || line[i] == '.' || line[i] == '-')
+					s += line[i];
+				else break;
 			}
 
-			var mousePos = e.GetPosition(viewport);
-			var hitPoint = viewport.FindNearestPoint(mousePos);
+			if (double.TryParse(s, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out double res))
+				return res;
 
-			if (hitPoint.HasValue)
+			return null;
+		}
+
+
+		private void HandleGCodeMapping(RayMeshGeometry3DHitTestResult meshHit)
+		{
+			var hitVisual = meshHit.VisualHit;
+			if (hitVisual == null) return;
+
+			// 1. Das Ziel-Visual im Mapping finden (Baum-Suche für Gruppen/Modelle)
+			Visual3D target = null;
+			DependencyObject parent = hitVisual;
+			while (parent != null)
 			{
-				double x = hitPoint.Value.X;
-				double y = hitPoint.Value.Y;
-
-				// 1. Koordinaten in die Debug-Box schreiben
-				txtViewportCoords.Text = string.Format("X: {0:F2} | Y: {1:F2}", x, y);
-
-				// 2. Abstand berechnen, falls ein Punkt davor existiert
-				if (lastClickPoint.HasValue)
+				if (parent is Visual3D v3d && _lineMapping.ContainsKey(v3d))
 				{
-					double dx = x - lastClickPoint.Value.X;
-					double dy = y - lastClickPoint.Value.Y;
-					double dist = Math.Sqrt(dx * dx + dy * dy);
+					target = v3d;
+					break;
+				}
+				parent = VisualTreeHelper.GetParent(parent);
+			}
 
-					// Anzeige der Gesamtdistanz und der Einzelachsen (Betrag genommen für Abstände)
-					txtViewportDist.Text = string.Format("Abstand: {0:F3} mm (dX: {1:F2} | dY: {2:F2})",
-														  dist, Math.Abs(dx), Math.Abs(dy));
+			if (target != null)
+			{
+				// 2. Index-Berechnung (Lines = 2 Punkte, Quads = 4 Punkte)
+				int divisor = (target is HelixToolkit.Wpf.QuadVisual3D) ? 4 : 2;
+				int segmentIndex = meshHit.VertexIndex1 / divisor;
+
+				var indices = _lineMapping[target];
+
+				if (segmentIndex >= 0 && segmentIndex < indices.Count)
+				{
+					// 3. 1-basierte Zeilennummer aus dem Mapping holen
+					int lineNumber = indices[segmentIndex];
+
+					// 4. Daten-Extraktion aus der geladenen Datei
+					if (lineNumber > 0 && lineNumber <= machine.File.Count)
+					{
+						string gcodeLine = machine.File[lineNumber - 1];
+
+						// Koordinaten aus dem Text parsen
+						double? x = GetCoord(gcodeLine, 'X');
+						double? y = GetCoord(gcodeLine, 'Y');
+
+						// Globale Variablen für "Send to Manual" aktualisieren
+						if (x.HasValue) _lastX = x.Value;
+						if (y.HasValue) _lastY = y.Value;
+
+						// --- DIE VISUELLE NADEL ---
+						if (_clickMarker != null)
+						{
+							// Wir setzen die Nadel auf die exakten G-Code-Koordinaten
+							// Z nehmen wir vom Klick-Punkt, damit sie nicht "im Boden" versinkt
+							_clickMarker.Center = new Point3D(_lastX, _lastY, meshHit.PointHit.Z + 0.2);
+						}
+
+						System.Diagnostics.Debug.WriteLine($"KLICK: Seg-{segmentIndex} -> Zeile {lineNumber}: {gcodeLine} (Nadel bei X{_lastX} Y{_lastY})");
+
+						// 5. UI-Synchronisation (Scrollen und Markieren)
+						SelectLineInUI(lineNumber - 1);
+					}
+				}
+			}
+			else
+			{
+				System.Diagnostics.Debug.WriteLine("Kein Mapping für dieses Objekt gefunden.");
+			}
+		}
+
+		private void SelectLineInUI(int lineNumber)
+		{
+			// Wir prüfen zuerst, ob die File-Box (ListBox) überhaupt da ist.
+			if (ListViewFile != null)
+			{
+				// Sicherstellen, dass die Zeilennummer im gültigen Bereich liegt
+				if (lineNumber >= 0 && lineNumber < ListViewFile.Items.Count)
+				{
+					// 1. Die Zeile markieren
+					ListViewFile.SelectedIndex = lineNumber;
+
+					// 2. Die Liste automatisch dorthin scrollen, damit die Zeile sichtbar ist
+					//ListViewFile.ScrollIntoView(ListViewFile.Items[lineNumber]);
+					// Wir zwingen das Scrollen in die nächste UI-Verarbeitungsschleife
+					Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.ContextIdle, new Action(() =>
+					{
+						ListViewFile.ScrollIntoView(ListViewFile.Items[lineNumber]);
+
+						// Falls OCP die Selektion visuell "verschluckt", erzwingen wir ein Update
+						var container = ListViewFile.ItemContainerGenerator.ContainerFromIndex(lineNumber) as FrameworkElement;
+						container?.BringIntoView();
+					}));
+
+					// 3. Optional: Den Fokus setzen, damit die Zeile farblich hervorgehoben wird
+					ListViewFile.Focus();
+				}
+			}
+		}
+
+
+		private void viewport_MouseDown(object sender, MouseButtonEventArgs e)
+		{
+			Point mousePos = e.GetPosition(viewport);
+
+			// Variablen initialisieren
+			double bestDist = 20.0;
+			int bestLineNumber = -1;
+			Point3D bestHitPoint = new Point3D();
+			bool hitFound = false; // <-- Hier definiert
+
+			// 1. Dein bewährter Magnet-Loop
+			foreach (var entry in _lineMapping)
+			{
+				var visual = entry.Key as HelixToolkit.Wpf.LinesVisual3D;
+				if (visual == null || visual.Points == null || !visual.IsRendering) continue;
+
+				var indices = entry.Value;
+				for (int i = 0; i < visual.Points.Count - 1; i += 2)
+				{
+					Point3D p1 = visual.Points[i];
+					Point3D p2 = visual.Points[i + 1];
+
+					Point screenP1 = Point3DToPoint2D(p1);
+					Point screenP2 = Point3DToPoint2D(p2);
+
+					double dist = FindDistanceToSegment(mousePos, screenP1, screenP2);
+
+					// G0 Bestrafung
+					double effectiveDist = (visual == ModelRapid) ? dist + 50.0 : dist;
+
+					if (effectiveDist < bestDist)
+					{
+						bestDist = effectiveDist;
+						bestHitPoint = (p1.Z > p2.Z) ? p1 : p2;
+						bestLineNumber = indices[i / 2];
+						hitFound = true; // <-- Jetzt wissen wir: Wir haben G-Code getroffen
+					}
+				}
+			}
+
+			// 2. Punkt bestimmen (G-Code Treffer oder freie Fläche)
+			Point3D pointToUse;
+			if (hitFound)
+			{
+				pointToUse = bestHitPoint;
+			}
+			else
+			{
+				// Manueller Ersatz für FindRay, falls HelixToolkit zickt:
+				var viewport3D = viewport.Viewport;
+				var hitResult = VisualTreeHelper.HitTest(viewport3D, mousePos) as RayMeshGeometry3DHitTestResult;
+				if (hitResult != null)
+					pointToUse = hitResult.PointHit;
+				else
+					pointToUse = new Point3D(0, 0, 0); // Letzter Ausweg
+			}
+
+			// 3. Die Mess-Logik mit DEINEM BtnMeasure
+			if (BtnMeasure.IsChecked == true)
+			{
+				if (_firstMeasurePoint == null)
+				{
+					// --- ERSTER PUNKT ---
+					_firstMeasurePoint = pointToUse;
+
+					if (TxtDistance != null)
+						TxtDistance.Text = "Click 2nd point in viewport";
+
+					// Wir entfernen den alten Marker sicherheitshalber aus dem Viewport, falls er existiert
+					if (_measureMarker != null && viewport.Children.Contains(_measureMarker))
+						viewport.Children.Remove(_measureMarker);
+
+					// Wir erstellen ihn komplett frisch an der richtigen Position
+					_measureMarker = new HelixToolkit.Wpf.SphereVisual3D
+					{
+						Radius = 0.5,
+						Fill = System.Windows.Media.Brushes.Blue,
+						Center = pointToUse // Position direkt beim Erstellen mitgeben!
+					};
+
+					viewport.Children.Add(_measureMarker);
+
+					if (_clickMarker != null)
+						_clickMarker.Center = pointToUse;
 				}
 				else
 				{
-					txtViewportDist.Text = "Abstand: Startpunkt gesetzt";
+					// --- ZWEITER PUNKT ---
+					Point3D p1 = _firstMeasurePoint.Value;
+					Point3D p2 = pointToUse;
+
+					// SHIFT-Check für Orthogonal-Modus (H/V)
+					if (Keyboard.IsKeyDown(Key.LeftShift) || Keyboard.IsKeyDown(Key.RightShift))
+					{
+						double deltaX = Math.Abs(p2.X - p1.X);
+						double deltaY = Math.Abs(p2.Y - p1.Y);
+
+						if (deltaX > deltaY)
+						{
+							// Horizontaler Versatz ist größer -> Y anpassen
+							p2 = new Point3D(p2.X, p1.Y, p1.Z);
+						}
+						else
+						{
+							// Vertikaler Versatz ist größer -> X anpassen
+							p2 = new Point3D(p1.X, p2.Y, p1.Z);
+						}
+					}
+
+					// Die restliche Berechnung nutzt nun das (evtl. korrigierte) p2
+					double dx = p2.X - p1.X;
+					double dy = p2.Y - p1.Y;
+					double dz = p2.Z - p1.Z;
+					double dist3D = Math.Sqrt(dx * dx + dy * dy + dz * dz);
+
+					if (TxtDistance != null)
+						TxtDistance.Text = $"Dist: {dist3D:F3} (X:{dx:F2} Y:{dy:F2} Z:{dz:F2})";
+
+					if (_clickMarker != null)
+						_clickMarker.Center = p2;
+
+					_firstMeasurePoint = null;
 				}
+				return;
+			}
 
-				// Punkt für die nächste Messung merken
-				lastClickPoint = hitPoint;
-
-				// Die G-Code Suche rufen wir hier nur auf, wenn wir sie 
-				// sicher performant programmiert haben. Vorerst auslassen:
-				// JumpToNearestGCodeLine(hitPoint.Value);
+			// 4. Normale Selektion (nur wenn nicht gemessen wird)
+			if (hitFound)
+			{
+				ProcessSelection(bestLineNumber, bestHitPoint);
 			}
 		}
+
+
+		private Point Point3DToPoint2D(Point3D p)
+		{
+			// Wir holen uns die "Total Transform" Matrix (Kamera + Viewport).
+			// Diese Methode ist der stabilste Teil von HelixToolkit.
+			var matrix = HelixToolkit.Wpf.Viewport3DHelper.GetTotalTransform(viewport.Viewport);
+
+			// Wir jagen den 3D-Punkt durch die Matrix
+			var transformedPoint = matrix.Transform(p);
+
+			// Das Ergebnis ist ein 2D-Punkt in Pixeln
+			return new Point(transformedPoint.X, transformedPoint.Y);
+		}
+
+		private double FindDistanceToSegment(Point p, Point a, Point b)
+		{
+			double dx = b.X - a.X;
+			double dy = b.Y - a.Y;
+			if (dx == 0 && dy == 0) return Math.Sqrt(Math.Pow(p.X - a.X, 2) + Math.Pow(p.Y - a.Y, 2));
+
+			double t = ((p.X - a.X) * dx + (p.Y - a.Y) * dy) / (dx * dx + dy * dy);
+			t = Math.Max(0, Math.Min(1, t)); // Begrenzung auf das Segment
+
+			double closestX = a.X + t * dx;
+			double closestY = a.Y + t * dy;
+
+			return Math.Sqrt(Math.Pow(p.X - closestX, 2) + Math.Pow(p.Y - closestY, 2));
+		}
+
+		private void ProcessSelection(int lineNumber, Point3D hitPoint)
+		{
+			if (lineNumber <= 0 || lineNumber > machine.File.Count) return;
+
+			string gcodeLine = machine.File[lineNumber - 1];
+
+			// 1. Wir parsen die Koordinaten aus dem Text (falls vorhanden)
+			double? x = GetCoord(gcodeLine, 'X');
+			double? y = GetCoord(gcodeLine, 'Y');
+
+			// 2. Fallback: Wenn X oder Y im Text fehlen (wie beim Drill),
+			// nutzen wir die Koordinaten des 3D-Treffers.
+			double finalX = x ?? hitPoint.X;
+			double finalY = y ?? hitPoint.Y;
+
+			// Wir aktualisieren unsere Historie, damit der nächste Klick 
+			// auf diesen Werten aufbauen kann.
+			_lastX = finalX;
+			_lastY = finalY;
+
+			// 3. Die Nadel (der rote Ball) setzen
+			if (_clickMarker != null)
+			{
+				// Wir setzen die Nadel auf die ermittelte Position.
+				// Z setzen wir etwas höher (z.B. +1.0), damit der Ball nicht 
+				// zur Hälfte im Werkstück verschwindet.
+				double displayZ = Math.Max(hitPoint.Z, 0) + 1.0;
+
+				_clickMarker.Center = new Point3D(finalX, finalY, displayZ);
+			}
+
+			// 4. UI-Synchronisation
+			SelectLineInUI(lineNumber - 1);
+		}
+
+
+		// Diese Hilfsfunktion gehört direkt unter die MouseDown-Routine
+		private bool IsVisualInMapping(DependencyObject visual)
+		{
+			DependencyObject current = visual;
+			while (current != null)
+			{
+				if (current is Visual3D v3d && _lineMapping.ContainsKey(v3d))
+					return true;
+
+				current = VisualTreeHelper.GetParent(current);
+			}
+			return false;
+		}
+
+		/*		private void viewport_MouseDown(object sender, MouseButtonEventArgs e)
+				{
+					var viewport = sender as HelixToolkit.Wpf.HelixViewport3D;
+					if (viewport == null) return;
+
+					// Nur aktiv, wenn einer der Modi in DEINER Box gewählt ist
+					if (BtnLinkToFile.IsChecked != true && BtnMeasure.IsChecked != true) return;
+
+					Point mousePos = e.GetPosition(viewport);
+
+					VisualTreeHelper.HitTest(viewport.Viewport, null,
+						new HitTestResultCallback(result =>
+						{
+							if (result is RayMeshGeometry3DHitTestResult meshHit)
+							{
+								// Der heilige Gral: Der exakte Punkt
+								Point3D pt = meshHit.PointHit;
+
+								// 1. Interne Variablen für Berechnungen füllen
+								_lastX = pt.X;
+								_lastY = pt.Y;
+
+								// 2. DIREKTES SENDEN AN DEINE BOX
+								// Hier benutzen wir die Namen deiner XAML-Controls
+								TxtPickedCoords.Text = string.Format("X: {0:F3} Y: {1:F3}", _lastX, _lastY);
+
+								// Falls Messmodus aktiv: Distanz berechnen
+								if (BtnMeasure.IsChecked == true)
+								{
+									HandleMeasurement(pt);
+								}
+
+								// Falls Link-Modus aktiv: G-Code Zeile suchen
+								if (BtnLinkToFile.IsChecked == true)
+								{
+									HandleGCodeMapping(meshHit);
+								}
+
+								return HitTestResultBehavior.Stop;
+							}
+							return HitTestResultBehavior.Continue;
+						}),
+						new PointHitTestParameters(mousePos));
+				}
+		*/
+
 
 		private void JumpToNearestGCodeLine(System.Windows.Media.Media3D.Point3D clickPoint)
 		{
@@ -553,6 +1073,8 @@ namespace OpenCNCPilot
 		// ----- ButtonLayFlatViewport ---------------------------------------------------
 		private void ButtonLayFlatViewport_Click(object sender, RoutedEventArgs e)
 		{
+			if (viewport == null) return; // Verhindert den Absturz komplett
+
 			// 1. Blickrichtung (Dein funktionierender Code)
 			viewport.Camera.Position = new System.Windows.Media.Media3D.Point3D(0, 0, viewport.Camera.Position.Z);
 			viewport.Camera.LookDirection = new System.Windows.Media.Media3D.Vector3D(0, 1, viewport.Camera.LookDirection.Z);
@@ -606,13 +1128,13 @@ namespace OpenCNCPilot
 			}
 
 			isViewFlat = true;
-			txtViewportCoords.Foreground = System.Windows.Media.Brushes.DarkGreen;
+			TxtDistance.Foreground = System.Windows.Media.Brushes.DarkGreen;
 		}
 
 		// Wird automatisch aufgerufen, sobald du die Kamera mit der Maus drehst/bewegst
 		private void viewport_CameraChanged(object sender, RoutedEventArgs e)
 		{
-			if (txtViewportCoords == null || viewport.Camera == null) return;
+			if (TxtPickedCoords == null || viewport.Camera == null) return;
 
 			var look = viewport.Camera.LookDirection;
 
@@ -624,15 +1146,15 @@ namespace OpenCNCPilot
 			if (stillFlat)
 			{
 				isViewFlat = true;
-				txtViewportCoords.Foreground = System.Windows.Media.Brushes.DarkGreen;
+				TxtPickedCoords.Foreground = System.Windows.Media.Brushes.DarkGreen;
 				// WICHTIG: Hier keinen Text überschreiben, sonst löscht jeder Zoom die Zahlen!
 			}
 			else
 			{
 				isViewFlat = false;
-				txtViewportCoords.Foreground = System.Windows.Media.Brushes.Gray;
-				txtViewportCoords.Text = "X: --- | Y: --- (3D-Modus)";
-				txtViewportDist.Text = "Abstand: ---";
+				TxtPickedCoords.Foreground = System.Windows.Media.Brushes.Gray;
+				TxtPickedCoords.Text = "X: --- | Y: --- (3D-Modus)";
+				TxtDistance.Text = "Abstand: ---";
 			}
 		}
 
@@ -769,46 +1291,56 @@ namespace OpenCNCPilot
 
 			return IntPtr.Zero;
 		}
-	}
 
-	// Diese kleine Klasse hilft uns, Name und Inhalt der Datei zu speichern
-	public class GCodeLayer : INotifyPropertyChanged
-	{
-		public string Name { get; set; }
-		public string[] Content { get; set; }
-		public string Filename { get; set; }
-		public bool IsActive { get; set; } = true;
 
-		// Logik für das Ausgrauen der Pfeile
-		private bool _isNotFirst = true;
-		public bool IsNotFirst
-		{
-			get => _isNotFirst;
-			set
+			public void UpdateLineMapping(System.Windows.Media.Media3D.Visual3D visual, List<int> lines)
 			{
-				if (_isNotFirst == value) return;
-				_isNotFirst = value;
-				OnPropertyChanged("IsNotFirst");
-			}
+				// Wir speichern die Liste der Zeilennummern für dieses 3D-Objekt
+				_lineMapping[visual] = lines;
+				System.Diagnostics.Debug.WriteLine($"Mapping aktualisiert: {lines.Count} Zeilen für Visual {visual.GetType().Name} registriert.");
 		}
 
-		private bool _isNotLast = true;
-		public bool IsNotLast
-		{
-			get => _isNotLast;
-			set
-			{
-				if (_isNotLast == value) return;
-				_isNotLast = value;
-				OnPropertyChanged("IsNotLast");
-			}
-		}
 
-		// --- Ab hier: Das "Sprachrohr" zum UI ---
-		public event PropertyChangedEventHandler PropertyChanged;
-		protected void OnPropertyChanged(string name)
+		// Diese kleine Klasse hilft uns, Name und Inhalt der Datei zu speichern
+		public class GCodeLayer : INotifyPropertyChanged
 		{
-			PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
+			public string Name { get; set; }
+			public string[] Content { get; set; }
+			public string Filename { get; set; }
+			public bool IsActive { get; set; } = true;
+
+			// Logik für das Ausgrauen der Pfeile
+			private bool _isNotFirst = true;
+			public bool IsNotFirst
+			{
+				get => _isNotFirst;
+				set
+				{
+					if (_isNotFirst == value) return;
+					_isNotFirst = value;
+					OnPropertyChanged("IsNotFirst");
+				}
+			}
+
+			private bool _isNotLast = true;
+			public bool IsNotLast
+			{
+				get => _isNotLast;
+				set
+				{
+					if (_isNotLast == value) return;
+					_isNotLast = value;
+					OnPropertyChanged("IsNotLast");
+				}
+			}
+
+			// --- Ab hier: Das "Sprachrohr" zum UI ---
+			public event PropertyChangedEventHandler PropertyChanged;
+			protected void OnPropertyChanged(string name)
+			{
+				PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
+			}
+
 		}
 	}
 }

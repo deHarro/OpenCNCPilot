@@ -162,47 +162,65 @@ namespace OpenCNCPilot.GCode
 			Point3DCollection rapidPoints = new Point3DCollection();
 			Point3DCollection arcPoints = new Point3DCollection();
 
+			List<int> lineIndices = new List<int>();
+			List<int> rapidIndices = new List<int>();
+			List<int> arcIndices = new List<int>();
+
 			foreach (Command c in Toolpath)
 			{
-				var l = c as Line;
-
-				if (l != null)
+				if (c is OpenCNCPilot.GCode.GCodeCommands.Line l)
 				{
-					if (!l.StartValid)
-						continue;
+					if (!l.StartValid) continue;
+
+					// Wir holen die Punkte vorab
+					Point3D start = l.Start.ToPoint3D();
+					Point3D end = l.End.ToPoint3D();
 
 					if (l.Rapid)
 					{
-						rapidPoints.Add(l.Start.ToPoint3D());
-						rapidPoints.Add(l.End.ToPoint3D());
+						rapidPoints.Add(start);
+						rapidPoints.Add(end);
+						rapidIndices.Add(l.LineNumber); // 1 Index für 2 Punkte
 					}
 					else
 					{
-						linePoints.Add(l.Start.ToPoint3D());
-						linePoints.Add(l.End.ToPoint3D());
+						linePoints.Add(start);
+						linePoints.Add(end);
+						lineIndices.Add(l.LineNumber); // 1 Index für 2 Punkte
 					}
-
 					continue;
 				}
 
-				var a = c as Arc;
-
-				if (a != null)
+				if (c is Arc a)
 				{
-					foreach (Motion sub in a.Split(Settings.Default.ViewportArcSplit))
+					// WICHTIG: Ein Arc wird in viele Segmente zerlegt.
+					// JEDES Segment braucht seinen eigenen Eintrag in der Index-Liste!
+					var segments = a.Split(Settings.Default.ViewportArcSplit);
+					foreach (Motion sub in segments)
 					{
 						arcPoints.Add(sub.Start.ToPoint3D());
 						arcPoints.Add(sub.End.ToPoint3D());
+						arcIndices.Add(a.LineNumber); // Für jedes Teilsegment die Bogen-Zeile speichern
 					}
 				}
 			}
 
+			// Zuweisung an die Visuals
 			line.Points = linePoints;
 			rapid.Points = rapidPoints;
 			arc.Points = arcPoints;
 
+			App.Current.Dispatcher.Invoke(() => {
+				var mw = System.Windows.Application.Current.Windows.OfType<OpenCNCPilot.MainWindow>().FirstOrDefault();
+				if (mw != null)
+				{
+					mw.UpdateLineMapping(line, lineIndices);
+					mw.UpdateLineMapping(rapid, rapidIndices);
+					mw.UpdateLineMapping(arc, arcIndices);
+				}
+			});
+
 			sw.Stop();
-			Console.WriteLine("Generating the toolpath model took {0} ms", sw.ElapsedMilliseconds);
 		}
 
 		public List<string> GetGCode()
