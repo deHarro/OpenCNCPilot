@@ -422,7 +422,9 @@
                                                     <LineBreak />
                                                     Jump to G-Code line, added marker,
                                                     <LineBreak />
-                                                    Distances corrected, added markers
+                                                    Distances corrected, added markers,
+                                                    <LineBreak />
+                                                    Adjustable marker size 
                                                 </TextBlock>
                                             </StackPanel>
                                         </TextBlock>
@@ -434,9 +436,9 @@
                 </Border>
 
                 <Border Style="{StaticResource stylePanelOut}">
-                    <Expander Header="Inspection &amp; Measurement" 
+                        <Expander Header="Inspection &amp; Measurement" 
                         x:Name="ExpanderMeasurement" 
-                        IsExpanded="True" 
+                        IsExpanded="{util:SettingBinding MeasureExpanderOpen}"
                         Margin="2" 
                         FlowDirection="LeftToRight"
                         Expanded="ExpanderMeasure_Expanded" 

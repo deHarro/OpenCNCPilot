@@ -838,5 +838,29 @@ namespace OpenCNCPilot.Properties {
                 this["GCodeFilterZeroMoves"] = value;
             }
         }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("False")]
+        public bool MeasureExpanderOpen {
+            get {
+                return ((bool)(this["MeasureExpanderOpen"]));
+            }
+            set {
+                this["MeasureExpanderOpen"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("0.5")]
+        public double MarkerSize {
+            get {
+                return ((double)(this["MarkerSize"]));
+            }
+            set {
+                this["MarkerSize"] = value;
+            }
+        }
     }
 }

@@ -79,19 +79,25 @@ namespace OpenCNCPilot
 				machine, this
 			);
 
-			// Im Konstruktor von MainWindow.xaml.cs einfügen:
 			Properties.Settings.Default.PropertyChanged += (s, e) => {
-				if (e.PropertyName == "EnableCodePreview")
+				if (e.PropertyName == "MarkerSize")
 				{
-					bool show = Properties.Settings.Default.EnableCodePreview;
+					double newSize = Properties.Settings.Default.MarkerSize;
 
-					// Wir schalten die Sichtbarkeit live um:
-					if (ModelRapid != null)
-						ModelRapid.IsRendering = show;
+					// ABSICHERUNG: 
+					// 1. Verhindern, dass der Marker unsichtbar wird (Größe 0)
+					// 2. Verhindern, dass er das ganze Bild füllt (z.B. Tippfehler 50 statt 0.5)
+					if (newSize <= 0.1) newSize = 0.1;
+					if (newSize > 5.0) newSize = 5.0;
 
-					// Falls die Arcs (G2/G3) auch zur "Vorschau" gehören sollen:
-					// if (ModelArc != null)
-					//    ModelArc.IsRendering = show;
+					double newRadius = newSize / 2.0;
+
+					// Nur zuweisen, wenn die Objekte existieren
+					if (_clickMarker != null) _clickMarker.Radius = newRadius;
+
+					// Beim Mess-Marker nur ändern, wenn er gerade aktiv/sichtbar sein soll
+					if (_measureMarker != null && _firstMeasurePoint != null)
+						_measureMarker.Radius = newRadius;
 				}
 			};
 
@@ -487,19 +493,16 @@ namespace OpenCNCPilot
 
 		private void BtnMeasure_Click(object sender, RoutedEventArgs e)
 		{
-			// Falls das UI den Button triggert, bevor die 3D-Welt bereit ist:
-			if (_measureMarker == null) return;
-
 			var btn = sender as System.Windows.Controls.Primitives.ToggleButton;
 			if (btn == null) return;
 
 			if (btn.IsChecked == true)
 			{
-				// FIX: Nur ausführen, wenn wir noch nicht im flachen Modus sind
+				// Lay-Flat jetzt erreichbar, da kein 'return' mehr davor steht
 				if (!isViewFlat)
 				{
 					ButtonLayFlatViewport_Click(null, null);
-					isViewFlat = true; // Merken, dass die Ansicht jetzt ausgerichtet ist
+					isViewFlat = true;
 				}
 
 				BtnLinkToFile.IsChecked = false;
@@ -511,10 +514,7 @@ namespace OpenCNCPilot
 			}
 			else
 			{
-				btn.ClearValue(Control.BackgroundProperty);
-				// Wenn der Button manuell deaktiviert wird, erlauben wir beim nächsten Mal wieder Lay-Flat
-				isViewFlat = false;
-				TxtDistance.Text = "---";
+				ResetMeasurementUI();
 			}
 		}
 
@@ -525,27 +525,27 @@ namespace OpenCNCPilot
 
 			if (btn.IsChecked == true)
 			{
+				// 1. Ansicht flach ausrichten, falls nötig
 				if (!isViewFlat)
 				{
 					ButtonLayFlatViewport_Click(null, null);
-					isViewFlat = true; // Merken, dass die Ansicht jetzt ausgerichtet ist
+					isViewFlat = true;
 				}
 
+				// 2. Mess-Modus deaktivieren und AUFRÄUMEN
 				BtnMeasure.IsChecked = false;
 				BtnMeasure.ClearValue(Control.BackgroundProperty);
-				TxtDistance.Text = "---"; // Mess-Status aufräumen
 
-				_measureMarker.Radius = 0; // "Unsichtbar" machen
+				// WICHTIG: Hier rufen wir das Cleanup für den Mess-Marker auf!
+				CleanupMeasureMarker();
+
+				// 3. UI-Feedback
+				TxtDistance.Text = "---";
 				_firstMeasurePoint = null;
-
-				// 2. Optik (Kräftiges Grün)
 				btn.Background = Brushes.LimeGreen;
 
-				// 3. Deine G-Code Logik
+				// 4. G-Code Logik
 				if (ExpanderFile != null) ExpanderFile.IsExpanded = true;
-
-				// Die Variable für die flache Ansicht setzen, falls du sie weiter nutzt
-				isViewFlat = true;
 			}
 			else
 			{
@@ -553,6 +553,47 @@ namespace OpenCNCPilot
 				isViewFlat = false;
 			}
 		}
+
+		private void CleanupMeasureMarker()
+		{
+			if (_measureMarker != null)
+			{
+				if (viewport.Children.Contains(_measureMarker))
+				{
+					viewport.Children.Remove(_measureMarker);
+				}
+				_measureMarker = null; // Wichtig: auf null setzen!
+			}
+			_firstMeasurePoint = null;
+		}
+
+		private void ResetMeasurementUI()
+		{
+			// 1. Blauen Marker (Mess-Anker) entfernen
+			if (_measureMarker != null)
+			{
+				if (viewport.Children.Contains(_measureMarker))
+					viewport.Children.Remove(_measureMarker);
+				_measureMarker = null;
+			}
+
+			// 2. Roten Marker (Auswahl) ausblenden oder entfernen
+			// Falls du ihn behalten willst für G-Code, lass ihn da. 
+			// Wenn er beim Messen-Beenden ganz weg soll:
+			if (_clickMarker != null && viewport.Children.Contains(_clickMarker))
+			{
+				viewport.Children.Remove(_clickMarker);
+				_clickMarker = null; // Wird bei normalem Click neu erstellt
+			}
+
+			// 3. Logik-Variablen zurücksetzen
+			_firstMeasurePoint = null;
+
+			// 4. Textfeld leeren
+			if (TxtDistance != null)
+				TxtDistance.Text = "---";
+		}
+
 
 		private void BtnCopyCoords_Click(object sender, RoutedEventArgs e)
 		{
@@ -768,6 +809,9 @@ namespace OpenCNCPilot
 			// 3. Die Mess-Logik mit DEINEM BtnMeasure
 			if (BtnMeasure.IsChecked == true)
 			{
+				// Radius einmal zentral für diesen Klick berechnen
+				double currentRadius = Properties.Settings.Default.MarkerSize / 2.0;
+
 				if (_firstMeasurePoint == null)
 				{
 					// --- ERSTER PUNKT ---
@@ -776,22 +820,25 @@ namespace OpenCNCPilot
 					if (TxtDistance != null)
 						TxtDistance.Text = "Click 2nd point in viewport";
 
-					// Wir entfernen den alten Marker sicherheitshalber aus dem Viewport, falls er existiert
+					// Blauen Marker (Anker) verwalten
 					if (_measureMarker != null && viewport.Children.Contains(_measureMarker))
 						viewport.Children.Remove(_measureMarker);
 
-					// Wir erstellen ihn komplett frisch an der richtigen Position
 					_measureMarker = new HelixToolkit.Wpf.SphereVisual3D
 					{
-						Radius = 0.5,
+						Radius = currentRadius,
 						Fill = System.Windows.Media.Brushes.Blue,
-						Center = pointToUse // Position direkt beim Erstellen mitgeben!
+						Center = pointToUse
 					};
 
 					viewport.Children.Add(_measureMarker);
 
+					// Roten Marker (Feedback) ebenfalls auf Punkt 1 setzen und Größe anpassen
 					if (_clickMarker != null)
+					{
+						_clickMarker.Radius = currentRadius;
 						_clickMarker.Center = pointToUse;
+					}
 				}
 				else
 				{
@@ -807,27 +854,28 @@ namespace OpenCNCPilot
 
 						if (deltaX > deltaY)
 						{
-							// Horizontaler Versatz ist größer -> Y anpassen
 							p2 = new Point3D(p2.X, p1.Y, p1.Z);
 						}
 						else
 						{
-							// Vertikaler Versatz ist größer -> X anpassen
 							p2 = new Point3D(p1.X, p2.Y, p1.Z);
 						}
 					}
 
-					// Die restliche Berechnung nutzt nun das (evtl. korrigierte) p2
 					double dx = p2.X - p1.X;
 					double dy = p2.Y - p1.Y;
 					double dz = p2.Z - p1.Z;
 					double dist3D = Math.Sqrt(dx * dx + dy * dy + dz * dz);
 
 					if (TxtDistance != null)
-						TxtDistance.Text = $"Dist: {dist3D:F3} (X:{dx:F2} Y:{dy:F2} Z:{dz:F2})";
+						TxtDistance.Text = $"Dist: {dist3D:F3}\n(X:{dx:F2} Y:{dy:F2} Z:{dz:F2})";
 
+					// Roten Marker auf den (korrigierten) Endpunkt setzen und Größe anpassen
 					if (_clickMarker != null)
+					{
+						_clickMarker.Radius = currentRadius;
 						_clickMarker.Center = p2;
+					}
 
 					_firstMeasurePoint = null;
 				}
