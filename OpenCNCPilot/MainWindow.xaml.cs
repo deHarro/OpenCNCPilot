@@ -481,13 +481,16 @@ namespace OpenCNCPilot
 
 		private void ExpanderMeasure_Collapsed(object sender, RoutedEventArgs e)
 		{
-			// Punkt 1: Buttons deaktivieren beim Schließen
+			// Buttons deaktivieren beim Schließen
 			if (BtnMeasure != null) BtnMeasure.IsChecked = false;
 			if (BtnLinkToFile != null) BtnLinkToFile.IsChecked = false;
 
 			// Farben zurücksetzen
 			BtnMeasure?.ClearValue(Control.BackgroundProperty);
 			BtnLinkToFile?.ClearValue(Control.BackgroundProperty);
+
+			// Alles im Viewport aufräumen
+			ResetMeasurementUI();
 		}
 
 
@@ -498,22 +501,28 @@ namespace OpenCNCPilot
 
 			if (btn.IsChecked == true)
 			{
-				// Lay-Flat jetzt erreichbar, da kein 'return' mehr davor steht
-				if (!isViewFlat)
-				{
-					ButtonLayFlatViewport_Click(null, null);
-					isViewFlat = true;
-				}
+				ResetMeasurementUI();
 
-				BtnLinkToFile.IsChecked = false;
-				BtnLinkToFile.ClearValue(Control.BackgroundProperty);
-				btn.Background = Brushes.DodgerBlue;
+				// Wir rufen Lay-Flat IMMER auf, um sicherzugehen
+				ButtonLayFlatViewport_Click(null, null);
+				isViewFlat = true;
+
+				// Aktiv-Farbe setzen (überschreibt das Standard-Blau)
+				btn.Background = System.Windows.Media.Brushes.LimeGreen;
+
+				if (BtnLinkToFile != null)
+				{
+					BtnLinkToFile.IsChecked = false;
+					BtnLinkToFile.ClearValue(Control.BackgroundProperty);
+				}
 
 				_firstMeasurePoint = null;
 				TxtDistance.Text = "Click 1st point in viewport";
 			}
 			else
 			{
+				btn.ClearValue(Control.BackgroundProperty);
+				isViewFlat = false;
 				ResetMeasurementUI();
 			}
 		}
@@ -525,17 +534,22 @@ namespace OpenCNCPilot
 
 			if (btn.IsChecked == true)
 			{
-				// 1. Ansicht flach ausrichten, falls nötig
-				if (!isViewFlat)
-				{
-					ButtonLayFlatViewport_Click(null, null);
-					isViewFlat = true;
-				}
+				ResetMeasurementUI();
+
+				// 1. Ansicht flach ausrichten
+				ButtonLayFlatViewport_Click(null, null);
+				isViewFlat = true;
+
+				// Aktiv-Farbe für Link-Button setzen
+				btn.Background = System.Windows.Media.Brushes.LimeGreen;
 
 				// 2. Mess-Modus deaktivieren und AUFRÄUMEN
-				BtnMeasure.IsChecked = false;
-				BtnMeasure.ClearValue(Control.BackgroundProperty);
-
+				if (BtnMeasure != null)
+				{
+					BtnMeasure.IsChecked = false;
+					BtnMeasure.ClearValue(Control.BackgroundProperty);
+				}
+				
 				// WICHTIG: Hier rufen wir das Cleanup für den Mess-Marker auf!
 				CleanupMeasureMarker();
 
@@ -551,6 +565,7 @@ namespace OpenCNCPilot
 			{
 				btn.ClearValue(Control.BackgroundProperty);
 				isViewFlat = false;
+				ResetMeasurementUI();
 			}
 		}
 
@@ -751,6 +766,13 @@ namespace OpenCNCPilot
 
 		private void viewport_MouseDown(object sender, MouseButtonEventArgs e)
 		{
+			// PINZETTE: Nur weitermachen, wenn einer der Modi wirklich aktiv ist
+			bool messModusAktiv = BtnMeasure?.IsChecked == true;
+			bool linkModusAktiv = BtnLinkToFile?.IsChecked == true;
+
+			if (!messModusAktiv && !linkModusAktiv)
+				return;
+
 			Point mousePos = e.GetPosition(viewport);
 
 			// Variablen initialisieren
@@ -811,6 +833,13 @@ namespace OpenCNCPilot
 			{
 				// Radius einmal zentral für diesen Klick berechnen
 				double currentRadius = Properties.Settings.Default.MarkerSize / 2.0;
+
+				// SICHERHEIT: Falls der rote Marker gelöscht wurde, neu erstellen
+				if (_clickMarker == null)
+				{
+					_clickMarker = new HelixToolkit.Wpf.SphereVisual3D { Fill = System.Windows.Media.Brushes.Red };
+					viewport.Children.Add(_clickMarker);
+				}
 
 				if (_firstMeasurePoint == null)
 				{
@@ -939,7 +968,7 @@ namespace OpenCNCPilot
 			_lastY = finalY;
 
 			// 3. Die Nadel (der rote Ball) setzen
-			if (_clickMarker != null)
+/*			if (_clickMarker != null)
 			{
 				// Wir setzen die Nadel auf die ermittelte Position.
 				// Z setzen wir etwas höher (z.B. +1.0), damit der Ball nicht 
@@ -948,6 +977,16 @@ namespace OpenCNCPilot
 
 				_clickMarker.Center = new Point3D(finalX, finalY, displayZ);
 			}
+*/
+			if (_clickMarker == null) // Falls sie durch Reset gelöscht wurde: Neu erschaffen
+			{
+				_clickMarker = new HelixToolkit.Wpf.SphereVisual3D { Fill = System.Windows.Media.Brushes.Red };
+				viewport.Children.Add(_clickMarker);
+			}
+
+			// Größe aus Settings holen
+			_clickMarker.Radius = Properties.Settings.Default.MarkerSize / 2.0;
+			_clickMarker.Center = new Point3D(finalX, finalY, Math.Max(hitPoint.Z, 0) + 1.0);			
 
 			// 4. UI-Synchronisation
 			SelectLineInUI(lineNumber - 1);
@@ -967,52 +1006,6 @@ namespace OpenCNCPilot
 			}
 			return false;
 		}
-
-		/*		private void viewport_MouseDown(object sender, MouseButtonEventArgs e)
-				{
-					var viewport = sender as HelixToolkit.Wpf.HelixViewport3D;
-					if (viewport == null) return;
-
-					// Nur aktiv, wenn einer der Modi in DEINER Box gewählt ist
-					if (BtnLinkToFile.IsChecked != true && BtnMeasure.IsChecked != true) return;
-
-					Point mousePos = e.GetPosition(viewport);
-
-					VisualTreeHelper.HitTest(viewport.Viewport, null,
-						new HitTestResultCallback(result =>
-						{
-							if (result is RayMeshGeometry3DHitTestResult meshHit)
-							{
-								// Der heilige Gral: Der exakte Punkt
-								Point3D pt = meshHit.PointHit;
-
-								// 1. Interne Variablen für Berechnungen füllen
-								_lastX = pt.X;
-								_lastY = pt.Y;
-
-								// 2. DIREKTES SENDEN AN DEINE BOX
-								// Hier benutzen wir die Namen deiner XAML-Controls
-								TxtPickedCoords.Text = string.Format("X: {0:F3} Y: {1:F3}", _lastX, _lastY);
-
-								// Falls Messmodus aktiv: Distanz berechnen
-								if (BtnMeasure.IsChecked == true)
-								{
-									HandleMeasurement(pt);
-								}
-
-								// Falls Link-Modus aktiv: G-Code Zeile suchen
-								if (BtnLinkToFile.IsChecked == true)
-								{
-									HandleGCodeMapping(meshHit);
-								}
-
-								return HitTestResultBehavior.Stop;
-							}
-							return HitTestResultBehavior.Continue;
-						}),
-						new PointHitTestParameters(mousePos));
-				}
-		*/
 
 
 		private void JumpToNearestGCodeLine(System.Windows.Media.Media3D.Point3D clickPoint)
@@ -1167,7 +1160,7 @@ namespace OpenCNCPilot
 				);
 
 				// Jetzt zoomen wir auf die gepufferte Box
-				viewport.ZoomExtents(paddedBounds, 500);
+				viewport.ZoomExtents(paddedBounds, 0);		// "0" verhindert das Hereingleiten von links oben
 			}
 			else
 			{
@@ -1341,11 +1334,11 @@ namespace OpenCNCPilot
 		}
 
 
-			public void UpdateLineMapping(System.Windows.Media.Media3D.Visual3D visual, List<int> lines)
-			{
-				// Wir speichern die Liste der Zeilennummern für dieses 3D-Objekt
-				_lineMapping[visual] = lines;
-				System.Diagnostics.Debug.WriteLine($"Mapping aktualisiert: {lines.Count} Zeilen für Visual {visual.GetType().Name} registriert.");
+		public void UpdateLineMapping(System.Windows.Media.Media3D.Visual3D visual, List<int> lines)
+		{
+			// Wir speichern die Liste der Zeilennummern für dieses 3D-Objekt
+			_lineMapping[visual] = lines;
+			System.Diagnostics.Debug.WriteLine($"Mapping aktualisiert: {lines.Count} Zeilen für Visual {visual.GetType().Name} registriert.");
 		}
 
 
@@ -1388,7 +1381,6 @@ namespace OpenCNCPilot
 			{
 				PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
 			}
-
-		}
-	}
-}
+		} // Ende GCodeLayer
+	} // Ende MainWindow
+} // Ende Namespace
