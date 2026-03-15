@@ -1,14 +1,12 @@
 ﻿using OpenCNCPilot.Communication;
-using OpenCNCPilot.GCode;
 using System;
 using System.Windows;
-using System.Collections.Generic;
 using System.Linq;
 using Microsoft.Win32;
-using System.IO;
 using System.Text;
 using OpenCNCPilot.Properties;
 using System.Windows.Controls;
+
 
 namespace OpenCNCPilot
 {
@@ -58,7 +56,7 @@ namespace OpenCNCPilot
 
 					// 5. Anzeige aktualisieren
 					UpdateLayerDisplay();
-					LayerCheckBox_Click(null, null);
+					FinalizeGCodeLoading();
 
 					System.Diagnostics.Debug.WriteLine("Hinzugefügt: " + layer.Name);
 				}
@@ -93,8 +91,9 @@ namespace OpenCNCPilot
 
 				// 3. UI updaten
 				UpdateLayerDisplay();
+				FinalizeGCodeLoading();
 
-				LayerCheckBox_Click(null, null);
+				ApplyGlobalViewportStandard();
 
 				CurrentFileName = System.IO.Path.GetFileName(openFileDialogGCode.FileName);
 			}
@@ -106,29 +105,6 @@ namespace OpenCNCPilot
 			HeightMapApplied = false;
 		}
 
-		/*		private void OpenFileDialogGCode_FileOk(object sender, System.ComponentModel.CancelEventArgs e)
-				{
-					if (machine.Mode == Machine.OperatingMode.SendFile)
-						return;
-
-					CurrentFileName = "";
-					ToolPath = GCodeFile.Empty;
-
-					openFileDialogGCode.InitialDirectory = System.IO.Path.GetDirectoryName(openFileDialogGCode.FileName);
-
-					try
-					{
-						machine.SetFile(System.IO.File.ReadAllLines(openFileDialogGCode.FileName));
-						CurrentFileName = System.IO.Path.GetFileName(openFileDialogGCode.FileName);
-					}
-					catch (Exception ex)
-					{
-						MessageBox.Show(ex.Message);
-					}
-
-					HeightMapApplied = false;
-				}
-		*/
 		private void SaveFileDialogGCode_FileOk(object sender, System.ComponentModel.CancelEventArgs e)
 		{
 			if (machine.Mode == Machine.OperatingMode.SendFile)
@@ -219,25 +195,7 @@ namespace OpenCNCPilot
 		// Diese Methode berechnet den G-Code neu, wenn ein Haken gesetzt/entfernt wird
 		private void LayerCheckBox_Click(object sender, RoutedEventArgs e)
 		{
-			// 1. G-Code über unsere neue Logik zusammenbauen (ohne M02, mit Z10)
-			string totalGCode = GetCombinedGCode();
-
-			// 2. In Zeilen zerlegen
-			string[] lines = totalGCode.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.RemoveEmptyEntries);
-
-			// 3. Der Maschine geben (Das aktualisiert bei dir ALLES)
-			if (lines.Length > 0)
-			{
-				machine.SetFile(lines); // Das ist der Befehl, der bei dir funktioniert!
-
-				// UI-Längenanzeige
-				RunFileLength.Text = lines.Length.ToString();
-			}
-			else
-			{
-				machine.SetFile(new string[0]);
-				RunFileLength.Text = "0";
-			}
+			FinalizeGCodeLoading();
 		}
 
 		// Diese Methode blendet das Layer-Fenster ein oder aus
@@ -357,7 +315,6 @@ namespace OpenCNCPilot
 				sb.AppendLine(content);
 				sb.AppendLine();
 			}
-
 			return sb.ToString();
 		}
 
@@ -412,21 +369,30 @@ namespace OpenCNCPilot
 			}
 		}
 
-		// Hilfsmethode, um den Code nicht doppelt schreiben zu müssen (wie in deinem CheckBox_Click)
-		private void UpdateMachineFile()
+		private void FinalizeGCodeLoading()
 		{
-			string totalGCode = GetCombinedGCode();
-			string[] lines = totalGCode.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.RemoveEmptyEntries);
+			// 1. Alles zusammenbauen
+			SyncMachineWithLayers();
 
-			if (lines.Length > 0)
+			// 2. Rotation verzögert ausführen (wegen des Timing-Problems)
+			int winkel = Properties.Settings.Default.GCodeRotation;
+			if (winkel > 0 && winkel < 360)
 			{
-				machine.SetFile(lines);
-				RunFileLength.Text = lines.Length.ToString();
+				int schritte = winkel / 90;
+				Dispatcher.BeginInvoke(new Action(() => {
+					for (int i = 0; i < schritte; i++)
+					{
+						ButtonEditRotateCW_Click(null, null);
+					}
+					ApplyGlobalViewportStandard();
+				}), System.Windows.Threading.DispatcherPriority.ContextIdle);
 			}
 			else
 			{
-				machine.SetFile(new string[0]);
-				RunFileLength.Text = "0";
+				// Auch ohne Rotation zentrieren, sobald die UI idle ist
+				Dispatcher.BeginInvoke(new Action(() => {
+					ApplyGlobalViewportStandard();
+				}), System.Windows.Threading.DispatcherPriority.ContextIdle);
 			}
 		}
 	}

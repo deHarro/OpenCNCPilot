@@ -64,6 +64,20 @@ namespace OpenCNCPilot
 			AppDomain.CurrentDomain.UnhandledException += UnhandledException;
 			InitializeComponent();
 
+			// --- BRECHSTANGE START ---
+			var cam = viewport?.Camera as System.Windows.Media.Media3D.ProjectionCamera;
+			if (cam != null)
+			{
+				string data = $"Pos: {cam.Position}\nDir: {cam.LookDirection}\nUp: {cam.UpDirection}";
+
+				// 1. In das Debug-Fenster schreiben
+				System.Diagnostics.Trace.WriteLine("!!! KAMERA DEBUG !!!\n" + data);
+
+				// 2. Ein Fenster aufpoppen lassen (nur zum Testen!)
+				// System.Windows.MessageBox.Show(data, "Kamera beim Start");
+			}
+			// --- BRECHSTANGE ENDE ---
+
 			_clickMarker = new HelixToolkit.Wpf.SphereVisual3D { Radius = 0.5, Fill = System.Windows.Media.Brushes.Red };
 			viewport.Children.Add(_clickMarker);
 			_measureMarker = new HelixToolkit.Wpf.SphereVisual3D { Radius = 0.5, Fill = System.Windows.Media.Brushes.Blue };
@@ -169,6 +183,8 @@ namespace OpenCNCPilot
 					OpenFileDialogGCode_FileOk(null, null);
 				}
 			}
+
+
 		}
 
 		public Vector3 LastProbePosMachine { get; set; }
@@ -1114,11 +1130,30 @@ namespace OpenCNCPilot
 		// ----- ButtonLayFlatViewport ---------------------------------------------------
 		private void ButtonLayFlatViewport_Click(object sender, RoutedEventArgs e)
 		{
-			if (viewport == null) return; // Verhindert den Absturz komplett
+			if (viewport == null || viewport.Camera == null) return;
 
-			// 1. Blickrichtung (Dein funktionierender Code)
-			viewport.Camera.Position = new System.Windows.Media.Media3D.Point3D(0, 0, viewport.Camera.Position.Z);
-			viewport.Camera.LookDirection = new System.Windows.Media.Media3D.Vector3D(0, 1, viewport.Camera.LookDirection.Z);
+			// 1. Blickrichtung, Orientierung sicher bestimmen
+			double targetUpX = viewport.Camera.LookDirection.X;
+			double targetUpY = viewport.Camera.LookDirection.Y;
+
+			// Wenn wir schon flach sind, nehmen wir das aktuelle Up
+			if (Math.Abs(targetUpX) < 0.01 && Math.Abs(targetUpY) < 0.01)
+			{
+				targetUpX = viewport.Camera.UpDirection.X;
+				targetUpY = viewport.Camera.UpDirection.Y;
+			}
+
+			Vector3D newUp = new Vector3D(targetUpX, targetUpY, 0);
+
+			// AUCH HIER: Normalisieren! 
+			if (newUp.Length > 0)
+				newUp.Normalize();
+			else
+				newUp = new Vector3D(0, 1, 0);
+
+			// Blickrichtung auf einen Standardwert (Länge egal, Hauptsache Richtung stimmt)
+			viewport.Camera.LookDirection = new Vector3D(0, 0, -1);
+			viewport.Camera.UpDirection = newUp;
 
 			// 2. Bounding Box ohne "FindBounds" berechnen
 			var totalBounds = System.Windows.Media.Media3D.Rect3D.Empty;
@@ -1200,54 +1235,31 @@ namespace OpenCNCPilot
 		}
 
 		// ----- ButtonRotateOrigin ---------------------------------------------------
-		private void ButtonRotateOrigin_Click(object sender, RoutedEventArgs e)                     // deHarro, 2024-09-11, Origin im Viewport passend zur Fräse ausrichten
+		private void ButtonRotateOrigin_Click(object sender, RoutedEventArgs e)
 		{
-			{   // do the rotating CCW
-				if (viewport.Camera.LookDirection.X == 0 && viewport.Camera.LookDirection.Y == 1 /*&& viewport.Camera.LookDirection.Z == 1*/)       // (0, 0, z) default
-				{
-					viewport.Camera.LookDirection = new System.Windows.Media.Media3D.Vector3D(1, 0, viewport.Camera.LookDirection.Z);
-				}
-				else if (viewport.Camera.LookDirection.X == 1 && viewport.Camera.LookDirection.Y == 0 /*&& viewport.Camera.LookDirection.Z == 1*/)  // (1, 0, z) my default 
-				{
-					viewport.Camera.LookDirection = new System.Windows.Media.Media3D.Vector3D(0, -1, viewport.Camera.LookDirection.Z);
-				}
-				else if (viewport.Camera.LookDirection.X == 0 && viewport.Camera.LookDirection.Y == -1 /*&& viewport.Camera.LookDirection.Z == 1*/) // (0, -1, z) other
-				{
-					viewport.Camera.LookDirection = new System.Windows.Media.Media3D.Vector3D(-1, 0, viewport.Camera.LookDirection.Z);
-				}
-				else if (viewport.Camera.LookDirection.X == -1 && viewport.Camera.LookDirection.Y == 0 /*&& viewport.Camera.LookDirection.Z == 1*/) // (-1, 0, z) other       {
-				{
-					viewport.Camera.LookDirection = new System.Windows.Media.Media3D.Vector3D(0, 1, viewport.Camera.LookDirection.Z);
-				}
-			}   // \do the rotating CCW
+			if (viewport == null || viewport.Camera == null) return;
 
-			// temporarily save current viewport look direction and camera position
-			System.Windows.Media.Media3D.Vector3D LookDirSave = new System.Windows.Media.Media3D.Vector3D(viewport.Camera.LookDirection.X, viewport.Camera.LookDirection.Y, viewport.Camera.LookDirection.Z);
-			System.Windows.Media.Media3D.Vector3D CamPosSave = new System.Windows.Media.Media3D.Vector3D(viewport.Camera.Position.X, viewport.Camera.Position.Y, viewport.Camera.Position.Z);
+			// Aktuelles "Oben" holen
+			var up = viewport.Camera.UpDirection;
 
-			// get currently stored viewport settings
-			string[] scoords = Properties.Settings.Default.ViewPortPos.Split(';');
-			try
+			// Drehung 90° um die Z-Achse: (x, y) -> (-y, x)
+			Vector3D newUp = new Vector3D(up.Y, -up.X, 0);
+
+			// --- WICHTIG: NORMALISIEREN ---
+			// Das stellt sicher, dass der Vektor wieder genau die Länge 1.0 hat.
+			// Ohne das wird der Vektor bei jedem Klick kürzer, bis das Bild verschwindet.
+			if (newUp.Length > 0)
+				newUp.Normalize();
+			else
+				newUp = new Vector3D(0, 1, 0); // Notfall-Fallback
+
+			viewport.Camera.UpDirection = newUp;
+
+			// Wenn wir im Flach-Modus sind, Zoom neu berechnen
+			if (isViewFlat)
 			{
-				IEnumerable<double> settingsCoords = scoords.Select(s => double.Parse(s));
-
-				viewport.Camera.Position = new Vector3(settingsCoords.Take(3).ToArray()).ToPoint3D();
-				viewport.Camera.LookDirection = new Vector3(settingsCoords.Skip(3).Take(3).ToArray()).ToVector3D();  // deHarro, 2024-09-08, nur 3 Werte für Vektor
+				ButtonLayFlatViewport_Click(null, null);
 			}
-			catch
-			{
-				ButtonResetViewport_Click(null, null);
-			}
-			List<double> coords = new List<double>();
-			coords.AddRange(new Vector3(viewport.Camera.Position).Array);                           // with getting from above position is retained
-			coords.AddRange(new Vector3(viewport.Camera.LookDirection).Array);                      // with getting from above lookdir is retained
-			coords.AddRange(new Vector3(viewport.Camera.UpDirection).Array);                        // store new UpDirection
-
-			Properties.Settings.Default.ViewPortPos = string.Join(";", coords.Select(d => d.ToString()));
-
-			// now restore temporarily saved viewport look direction and camera position
-			viewport.Camera.LookDirection = new System.Windows.Media.Media3D.Vector3D(LookDirSave.X, LookDirSave.Y, LookDirSave.Z);
-			viewport.Camera.Position = new System.Windows.Media.Media3D.Point3D(CamPosSave.X, CamPosSave.Y, CamPosSave.Z);
 		}
 
 		// ----- ButtonRestoreViewport ---------------------------------------------------
@@ -1258,13 +1270,32 @@ namespace OpenCNCPilot
 			try
 			{
 				IEnumerable<double> coords = scoords.Select(s => double.Parse(s));
+				double[] cArray = coords.ToArray();
 
 				viewport.Camera.Position = new Vector3(coords.Take(3).ToArray()).ToPoint3D();
 				viewport.Camera.LookDirection = new Vector3(coords.Skip(3).Take(3).ToArray()).ToVector3D();  // deHarro, 2024-09-08, nur 3 Werte für Vektor
+				if (cArray.Length >= 9)
+				{
+					viewport.Camera.UpDirection = new Vector3(cArray.Skip(6).Take(3).ToArray()).ToVector3D();
+				}
 			}
 			catch
 			{
 				ButtonResetViewport_Click(null, null);
+			}
+
+			if (viewport.Camera is System.Windows.Media.Media3D.ProjectionCamera c)
+			{
+				// Prüfen, ob Blickrichtung und Oben-Vektor parallel sind
+				double dot = Math.Abs(c.LookDirection.X * c.UpDirection.X +
+									  c.LookDirection.Y * c.UpDirection.Y +
+									  c.LookDirection.Z * c.UpDirection.Z);
+
+				// Falls sie fast parallel sind (Skalarprodukt nahe Maximum), erzwinge Y-Up
+				if (dot > 0.99)
+				{
+					c.UpDirection = new System.Windows.Media.Media3D.Vector3D(0, 1, 0);
+				}
 			}
 		}
 
@@ -1275,8 +1306,11 @@ namespace OpenCNCPilot
 
 			coords.AddRange(new Vector3(viewport.Camera.Position).Array);
 			coords.AddRange(new Vector3(viewport.Camera.LookDirection).Array);
+			// UpDirection hinzufügen (3 zusätzliche Werte)
+			coords.AddRange(new Vector3(viewport.Camera.UpDirection).Array);
 
 			Properties.Settings.Default.ViewPortPos = string.Join(";", coords.Select(d => d.ToString()));
+			Properties.Settings.Default.Save();
 		}
 
 		private void ButtonSaveTLOPos_Click(object sender, RoutedEventArgs e)
@@ -1382,5 +1416,163 @@ namespace OpenCNCPilot
 				PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
 			}
 		} // Ende GCodeLayer
+
+		// In MainWindow.xaml.cs einfügen
+		public void ApplyGlobalViewportStandard()
+		{
+
+			if (viewport == null) return;
+
+			// Wir bleiben beim bewährten ContextIdle
+			this.Dispatcher.InvokeAsync(() =>
+			{
+				// 1. Kamera-Konflikt lösen (EXAKT DEIN CODE)
+				if (viewport.Camera is System.Windows.Media.Media3D.ProjectionCamera cam)
+				{
+					// Nur eingreifen, wenn Look und Up fast parallel sind (Z-Z-Bug)
+					if (Math.Abs(cam.UpDirection.Z) > 0.9 && Math.Abs(cam.LookDirection.X) < 0.1)
+					{
+						cam.UpDirection = new System.Windows.Media.Media3D.Vector3D(0, 1, 0);
+					}
+				}
+
+				// 2. Bounding Box berechnen (EXAKT DEIN CODE)
+				var totalBounds = System.Windows.Media.Media3D.Rect3D.Empty;
+
+				foreach (var child in viewport.Children)
+				{
+					if (child is HelixToolkit.Wpf.LinesVisual3D visualLines)
+					{
+						if (visualLines.Color == System.Windows.Media.Colors.LightGray) continue;
+
+						if (visualLines.Content != null)
+						{
+							var bounds = visualLines.Content.Bounds;
+							if (!bounds.IsEmpty)
+								totalBounds.Union(bounds);
+						}
+					}
+				}
+
+				// 3. Gezielter Zoom (EXAKT DEIN CODE)
+				if (!totalBounds.IsEmpty)
+				{
+					double margin = 0.15;
+					double offsetX = totalBounds.SizeX * margin;
+					double offsetY = totalBounds.SizeY * margin;
+
+					var paddedBounds = new System.Windows.Media.Media3D.Rect3D(
+						totalBounds.X - offsetX / 2,
+						totalBounds.Y - offsetY / 2,
+						totalBounds.Z,
+						totalBounds.SizeX + offsetX,
+						totalBounds.SizeY + offsetY,
+						totalBounds.SizeZ
+					);
+
+					viewport.ZoomExtents(paddedBounds, 0);
+				}
+				else
+				{
+					// NEU: Falls kein G-Code da ist (Start), zeige den Tisch-Ursprung
+					// Damit verhinderst du, dass man beim Start ins Leere schaut.
+					viewport.ZoomExtents(new System.Windows.Media.Media3D.Rect3D(-10, -10, 0, 120, 120, 1), 0);
+				}
+			}, System.Windows.Threading.DispatcherPriority.ContextIdle);
+		} // Ende ApplyGlobalViewportStandard
+
+		private void SyncMachineWithLayers()
+		{
+			// 1. G-Code zusammenbauen
+			string totalGCode = GetCombinedGCode();
+			if (string.IsNullOrWhiteSpace(totalGCode)) return;
+
+			// 2. Rotation vorbereiten
+			int rotationAngle = Properties.Settings.Default.GCodeRotation;
+			int steps = (rotationAngle / 90) % 4;
+
+			string[] finalLines;
+
+			//if (steps > 0)
+			//{
+			//	// Wir nutzen den "Clumsy"-Weg, weil er der EINZIGE ist, den dein GCodeFile-Typ frisst
+			//	string tempPath = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "ocp_rotate_temp.nc");
+
+			//	try
+			//	{
+			//		System.IO.File.WriteAllText(tempPath, totalGCode);
+
+			//		// Das hier akzeptiert dein Compiler (haben wir oben gesehen)
+			//		var tempFile = GCodeFile.Load(tempPath);
+
+			//		for (int i = 0; i < steps; i++)
+			//		{
+			//			tempFile.RotateCW();
+			//		}
+
+			//		finalLines = tempFile.GetGCode().ToArray();
+			//	}
+			//	finally
+			//	{
+			//		// Sofort löschen, damit kein Müll bleibt
+			//		if (System.IO.File.Exists(tempPath)) System.IO.File.Delete(tempPath);
+			//	}
+			//}
+			//else
+			//{
+			//	finalLines = totalGCode.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.None);
+			//}
+
+			if (steps > 0)
+			{
+				string tempPath1 = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "ocp_rotate_in.nc");
+				string tempPath2 = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "ocp_rotate_out.nc");
+
+				System.IO.File.WriteAllText(tempPath1, totalGCode);
+
+				var tempFile = GCodeFile.Load(tempPath1);
+
+				for (int i = 0; i < steps; i++)
+				{
+					tempFile.RotateCW();
+				}
+
+				// Da 'Commands' nicht existiert, nutzen wir Martins 'Save'-Methode.
+				// Diese Methode MUSS die rotierten Koordinaten in Text umwandeln.
+				tempFile.Save(tempPath2);
+
+				// Jetzt lesen wir die fertig rotierten Zeilen einfach wieder ein
+				finalLines = System.IO.File.ReadAllLines(tempPath2);
+
+				// Aufräumen
+				if (System.IO.File.Exists(tempPath1)) System.IO.File.Delete(tempPath1);
+				if (System.IO.File.Exists(tempPath2)) System.IO.File.Delete(tempPath2);
+			}
+			else
+			{
+				finalLines = totalGCode.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.None);
+			}
+
+			// 3. Der Maschine übergeben
+			machine.SetFile(finalLines);
+
+			// 4. UI-Längenanzeige
+			RunFileLength.Text = finalLines.Length.ToString();
+
+			// A. Den internen GCode-Status der Maschine aktualisieren
+			// Das zwingt die Listbox oft dazu, ihren Index neu aufzubauen
+			machine.GetType().GetMethod("OnFileUpdated")?.Invoke(machine, null);
+
+			// B. Den Viewport (3D) zum Neuzeichnen zwingen
+			// Wir rufen deine vorhandene Zoom-Funktion auf, die meistens auch ein Redraw auslöst
+			ApplyGlobalViewportStandard();
+
+			// 5. Memory-Leak-Bremse für PCB (30k+ Lines)
+			if (finalLines.Length > 20000)
+			{
+				GC.Collect(1);
+			}
+		}
+
 	} // Ende MainWindow
 } // Ende Namespace
