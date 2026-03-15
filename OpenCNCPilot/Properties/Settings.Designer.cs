@@ -862,5 +862,17 @@ namespace OpenCNCPilot.Properties {
                 this["MarkerSize"] = value;
             }
         }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("0")]
+        public int GCodeRotation {
+            get {
+                return ((int)(this["GCodeRotation"]));
+            }
+            set {
+                this["GCodeRotation"] = value;
+            }
+        }
     }
 }
