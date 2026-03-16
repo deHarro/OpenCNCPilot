@@ -539,7 +539,7 @@
                                         <TextBlock FlowDirection="LeftToRight">
                                             Rotate origin to match orientation of mill.
                                             <LineBreak />
-                                            Issue "Lay flat 3D Viewport" first!
+                                            Don't forget to rotate design to lay between the origins X/Y arrows! Use RotateCW (Edit box).
                                         </TextBlock>
                                     </Button.ToolTip>
                                 </Button>

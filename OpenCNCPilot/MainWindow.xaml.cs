@@ -12,11 +12,10 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Interop;
 using System.Collections.ObjectModel;
-//using System.ComponentModel;
-using System.Windows.Input;         // Für MouseButtonEventArgs
-using System.Windows.Media;         // Für VisualTreeHelper / HitTest
-using System.Windows.Media.Media3D;  // Für Point3D und RayMeshGeometry3DHitTestResult
-using HelixToolkit.Wpf;               // Falls du noch Helix-Typen nutzt
+using System.Windows.Input;				// Für MouseButtonEventArgs
+using System.Windows.Media;				// Für VisualTreeHelper / HitTest
+using System.Windows.Media.Media3D;		// Für Point3D und RayMeshGeometry3DHitTestResult
+using HelixToolkit.Wpf;					// Falls du noch Helix-Typen nutzt
 
 namespace OpenCNCPilot
 {
@@ -80,7 +79,7 @@ namespace OpenCNCPilot
 
 			_clickMarker = new HelixToolkit.Wpf.SphereVisual3D { Radius = 0.5, Fill = System.Windows.Media.Brushes.Red };
 			viewport.Children.Add(_clickMarker);
-			_measureMarker = new HelixToolkit.Wpf.SphereVisual3D { Radius = 0.5, Fill = System.Windows.Media.Brushes.Blue };
+			_measureMarker = new HelixToolkit.Wpf.SphereVisual3D { Radius = startRadius, Fill = System.Windows.Media.Brushes.Blue };
 			viewport.Children.Add(_measureMarker);
 			// WICHTIG: Am Anfang unsichtbar machen, damit er nicht bei (0,0,0) im Modell schwebt
 			_measureMarker.Content = null;
@@ -96,22 +95,10 @@ namespace OpenCNCPilot
 			Properties.Settings.Default.PropertyChanged += (s, e) => {
 				if (e.PropertyName == "MarkerSize")
 				{
-					double newSize = Properties.Settings.Default.MarkerSize;
+					double newRadius = GetDynamicMarkerSize() / 2.0;
 
-					// ABSICHERUNG: 
-					// 1. Verhindern, dass der Marker unsichtbar wird (Größe 0)
-					// 2. Verhindern, dass er das ganze Bild füllt (z.B. Tippfehler 50 statt 0.5)
-					if (newSize <= 0.1) newSize = 0.1;
-					if (newSize > 5.0) newSize = 5.0;
-
-					double newRadius = newSize / 2.0;
-
-					// Nur zuweisen, wenn die Objekte existieren
 					if (_clickMarker != null) _clickMarker.Radius = newRadius;
-
-					// Beim Mess-Marker nur ändern, wenn er gerade aktiv/sichtbar sein soll
-					if (_measureMarker != null && _firstMeasurePoint != null)
-						_measureMarker.Radius = newRadius;
+					if (_measureMarker != null) _measureMarker.Radius = newRadius;
 				}
 			};
 
@@ -609,7 +596,6 @@ namespace OpenCNCPilot
 			}
 
 			// 2. Roten Marker (Auswahl) ausblenden oder entfernen
-			// Falls du ihn behalten willst für G-Code, lass ihn da. 
 			// Wenn er beim Messen-Beenden ganz weg soll:
 			if (_clickMarker != null && viewport.Children.Contains(_clickMarker))
 			{
@@ -848,7 +834,7 @@ namespace OpenCNCPilot
 			if (BtnMeasure.IsChecked == true)
 			{
 				// Radius einmal zentral für diesen Klick berechnen
-				double currentRadius = Properties.Settings.Default.MarkerSize / 2.0;
+				double currentRadius = GetDynamicMarkerSize() / 2.0;
 
 				// SICHERHEIT: Falls der rote Marker gelöscht wurde, neu erstellen
 				if (_clickMarker == null)
@@ -934,6 +920,19 @@ namespace OpenCNCPilot
 			}
 		}
 
+		// Diese Hilfsfunktion gehört direkt unter die MouseDown-Routine
+		private bool IsVisualInMapping(DependencyObject visual)
+		{
+			DependencyObject current = visual;
+			while (current != null)
+			{
+				if (current is Visual3D v3d && _lineMapping.ContainsKey(v3d))
+					return true;
+
+				current = VisualTreeHelper.GetParent(current);
+			}
+			return false;
+		}
 
 		private Point Point3DToPoint2D(Point3D p)
 		{
@@ -978,95 +977,23 @@ namespace OpenCNCPilot
 			double finalX = x ?? hitPoint.X;
 			double finalY = y ?? hitPoint.Y;
 
-			// Wir aktualisieren unsere Historie, damit der nächste Klick 
-			// auf diesen Werten aufbauen kann.
+			// Wir aktualisieren unsere Historie, damit der nächste Klick  auf diesen Werten aufbauen kann.
 			_lastX = finalX;
 			_lastY = finalY;
 
 			// 3. Die Nadel (der rote Ball) setzen
-/*			if (_clickMarker != null)
-			{
-				// Wir setzen die Nadel auf die ermittelte Position.
-				// Z setzen wir etwas höher (z.B. +1.0), damit der Ball nicht 
-				// zur Hälfte im Werkstück verschwindet.
-				double displayZ = Math.Max(hitPoint.Z, 0) + 1.0;
-
-				_clickMarker.Center = new Point3D(finalX, finalY, displayZ);
-			}
-*/
-			if (_clickMarker == null) // Falls sie durch Reset gelöscht wurde: Neu erschaffen
+			if (_clickMarker == null)			// Falls sie durch Reset gelöscht wurde: Neu erschaffen
 			{
 				_clickMarker = new HelixToolkit.Wpf.SphereVisual3D { Fill = System.Windows.Media.Brushes.Red };
 				viewport.Children.Add(_clickMarker);
 			}
 
 			// Größe aus Settings holen
-			_clickMarker.Radius = Properties.Settings.Default.MarkerSize / 2.0;
+			_clickMarker.Radius = GetDynamicMarkerSize() / 2.0;
 			_clickMarker.Center = new Point3D(finalX, finalY, Math.Max(hitPoint.Z, 0) + 1.0);			
 
 			// 4. UI-Synchronisation
 			SelectLineInUI(lineNumber - 1);
-		}
-
-
-		// Diese Hilfsfunktion gehört direkt unter die MouseDown-Routine
-		private bool IsVisualInMapping(DependencyObject visual)
-		{
-			DependencyObject current = visual;
-			while (current != null)
-			{
-				if (current is Visual3D v3d && _lineMapping.ContainsKey(v3d))
-					return true;
-
-				current = VisualTreeHelper.GetParent(current);
-			}
-			return false;
-		}
-
-
-		private void JumpToNearestGCodeLine(System.Windows.Media.Media3D.Point3D clickPoint)
-		{
-			int globalIndex = 0;
-			int bestGlobalIndex = -1;
-			double minDistance = 0.5; // 0.5mm Toleranz für Platinen-Präzision
-
-			foreach (var layer in AllLayers)
-			{
-				if (!layer.IsActive)
-				{
-					// Auch wenn der Layer inaktiv ist, müssen wir seine Zeilen mitzählen,
-					// damit der Index in der Hauptliste am Ende stimmt!
-					globalIndex += layer.Content.Length;
-					continue;
-				}
-
-				for (int i = 0; i < layer.Content.Length; i++)
-				{
-					string line = layer.Content[i];
-
-					// Wir suchen im Text der Zeile nach X und Y Werten
-					// Das ist viel schneller als die UI-Elemente zu fragen!
-					if (TryParseGCodeCoords(line, out double x, out double y))
-					{
-						double dx = clickPoint.X - x;
-						double dy = clickPoint.Y - y;
-						double d = Math.Sqrt(dx * dx + dy * dy);
-
-						if (d < minDistance)
-						{
-							minDistance = d;
-							bestGlobalIndex = globalIndex + i;
-						}
-					}
-				}
-				globalIndex += layer.Content.Length;
-			}
-
-			if (bestGlobalIndex != -1)
-			{
-				ListViewFile.SelectedIndex = bestGlobalIndex;
-				ListViewFile.ScrollIntoView(ListViewFile.SelectedItem);
-			}
 		}
 
 		// Hilfsfunktion, um X/Y aus einem G-Code String zu fischen (sehr performant)
@@ -1088,47 +1015,7 @@ namespace OpenCNCPilot
 			catch { return false; }
 		}
 
-		/*
-				private void JumpToNearestGCodeLine(System.Windows.Media.Media3D.Point3D clickPoint)
-				{
-					int bestIndex = -1;
-					double minDistance = 1.0; // 1mm Toleranz
-
-					// Wir gehen durch alle Einträge, die gerade in deiner ListViewFile angezeigt werden
-					for (int i = 0; i < ListViewFile.Items.Count; i++)
-					{
-						// OCP speichert hier oft Objekte vom Typ 'GCodeLine'
-						var line = ListViewFile.Items[i];
-
-						// Jetzt kommt der "Hack": Wir versuchen die Koordinaten aus dem Objekt zu lesen
-						// Da ich die genaue Klasse nicht kenne, nutzen wir eine vorsichtige Prüfung:
-						dynamic cmd = line;
-						try
-						{
-							double dx = clickPoint.X - (double)cmd.X;
-							double dy = clickPoint.Y - (double)cmd.Y;
-							double d = Math.Sqrt(dx * dx + dy * dy);
-
-							if (d < minDistance)
-							{
-								minDistance = d;
-								bestIndex = i;
-							}
-						}
-						catch { // Falls das Objekt kein X/Y hat, ignorieren wir es
-						}
-					}
-
-					if (bestIndex != -1)
-					{
-						ListViewFile.SelectedIndex = bestIndex;
-						ListViewFile.ScrollIntoView(ListViewFile.SelectedItem);
-					}
-				}
-		*/
-
-		// ----- ButtonLayFlatViewport ---------------------------------------------------
-		private void ButtonLayFlatViewport_Click(object sender, RoutedEventArgs e)
+		private double GetDynamicMarkerSize()
 		{
 			if (viewport == null || viewport.Camera == null) return;
 
@@ -1155,60 +1042,105 @@ namespace OpenCNCPilot
 			viewport.Camera.LookDirection = new Vector3D(0, 0, -1);
 			viewport.Camera.UpDirection = newUp;
 
-			// 2. Bounding Box ohne "FindBounds" berechnen
-			var totalBounds = System.Windows.Media.Media3D.Rect3D.Empty;
+				// Wir erhöhen den Faktor etwas: Referenzwert 50mm statt 100mm
+				// Damit werden Marker bei großen Platinen noch deutlicher.
+				double factor = Math.Max(1.0, diagonal / 50.0);
+				double finalSize = baseSize * Math.Min(factor, 15.0);
 
-			foreach (var child in viewport.Children)
-			{
-				// Wir suchen gezielt nach den Linien des G-Codes
-				// In OCP sind das oft LinesVisual3D
-				if (child is HelixToolkit.Wpf.LinesVisual3D lines)
-				{
-					// Wir ignorieren die Maschinengrenzen anhand ihrer Farbe oder ihres Namens
-					// Die Maschinengrenzen sind in OCP oft Grau oder Weiß. 
-					// Wenn die G-Code-Linien eine andere Farbe haben, können wir filtern:
-					if (lines.Color == System.Windows.Media.Colors.LightGray) continue;
+				// Debug-Ausgabe (erscheint im "Output" Fenster von Visual Studio)
+				System.Diagnostics.Debug.WriteLine($"Marker-Check: Diag={diagonal:F1}, Factor={factor:F1}, Result={finalSize:F1}");
 
-					// Falls das Objekt eine Content-Eigenschaft hat, nehmen wir deren Bounds
-					var bounds = lines.Content.Bounds;
-					if (!bounds.IsEmpty)
-						totalBounds.Union(bounds);
-				}
+				return finalSize;
 			}
 
-			// 3. Zoom ausführen
-			if (!totalBounds.IsEmpty)
-			{
-				// Wir berechnen 15% Puffer
-				double margin = 0.15;
-				double offsetX = totalBounds.SizeX * margin;
-				double offsetY = totalBounds.SizeY * margin;
-
-				// Wir erstellen eine neue, größere Box basierend auf der alten
-				var paddedBounds = new System.Windows.Media.Media3D.Rect3D(
-					totalBounds.X - offsetX / 2,
-					totalBounds.Y - offsetY / 2,
-					totalBounds.Z,
-					totalBounds.SizeX + offsetX,
-					totalBounds.SizeY + offsetY,
-					totalBounds.SizeZ
-				);
-
-				// Jetzt zoomen wir auf die gepufferte Box
-				viewport.ZoomExtents(paddedBounds, 0);		// "0" verhindert das Hereingleiten von links oben
-			}
-			else
-			{
-				// Fallback: Wenn wir nichts spezifisches finden, nimm alles
-				viewport.ZoomExtents();
-			}
-
-			isViewFlat = true;
-			TxtDistance.Foreground = System.Windows.Media.Brushes.DarkGreen;
+			return baseSize;
 		}
 
-		// Wird automatisch aufgerufen, sobald du die Kamera mit der Maus drehst/bewegst
-		private void viewport_CameraChanged(object sender, RoutedEventArgs e)
+		//----- ButtonLayFlatViewport ---------------------------------------------------
+		private void ButtonLayFlatViewport_Click(object sender, RoutedEventArgs e)
+        {
+            if (viewport == null || viewport.Camera == null) return;
+
+            // --- NEU: ORIENTIERUNG BEIBEHALTEN ---
+            // Wir schauen, in welche Richtung die Kamera horizontal blickt (X und Y).
+            // Das ist die Richtung, die der User mit "ButtonRotateOrigin" eingestellt hat.
+            double targetUpX = viewport.Camera.LookDirection.X;
+            double targetUpY = viewport.Camera.LookDirection.Y;
+
+            // Falls wir schon flach schauen (X und Y fast 0), nehmen wir die aktuelle UpDirection,
+            // um die Drehung nicht zu verlieren.
+            if (Math.Abs(targetUpX) < 0.01 && Math.Abs(targetUpY) < 0.01)
+            {
+                targetUpX = viewport.Camera.UpDirection.X;
+                targetUpY = viewport.Camera.UpDirection.Y;
+            }
+
+            // Wir "frieren" diese Richtung für die Oben-Ausrichtung ein (Z auf 0)
+            // Falls beides 0 ist (Notfall-Fallback), nehmen wir Y als oben.
+            if (Math.Abs(targetUpX) < 0.01 && Math.Abs(targetUpY) < 0.01)
+            {
+                targetUpY = 1;
+            }
+
+            // 1. Blickrichtung & Oben-Ausrichtung (DYNAMISCH)
+            // Blick immer senkrecht runter (Z = -100)
+            viewport.Camera.LookDirection = new System.Windows.Media.Media3D.Vector3D(0, 0, -100);
+            // Oben ist jetzt das, was vorher "Vorne" war
+            viewport.Camera.UpDirection = new System.Windows.Media.Media3D.Vector3D(targetUpX, targetUpY, 0);
+            // 2. Bounding Box ohne "FindBounds" berechnen
+            var totalBounds = System.Windows.Media.Media3D.Rect3D.Empty;
+
+            foreach (var child in viewport.Children)
+            {
+                // Wir suchen gezielt nach den Linien des G-Codes
+                // In OCP sind das oft LinesVisual3D
+                if (child is HelixToolkit.Wpf.LinesVisual3D lines)
+                {
+                    // Wir ignorieren die Maschinengrenzen anhand ihrer Farbe oder ihres Namens
+                    // Die Maschinengrenzen sind in OCP oft Grau oder Weiß. 
+                    // Wenn die G-Code-Linien eine andere Farbe haben, können wir filtern:
+                    if (lines.Color == System.Windows.Media.Colors.LightGray) continue;
+
+                    // Falls das Objekt eine Content-Eigenschaft hat, nehmen wir deren Bounds
+                    var bounds = lines.Content.Bounds;
+                    if (!bounds.IsEmpty)
+                        totalBounds.Union(bounds);
+                }
+            }
+
+            // 3. Zoom ausführen
+            if (!totalBounds.IsEmpty)
+            {
+                // Wir berechnen 15% Puffer
+                double margin = 0.15;
+                double offsetX = totalBounds.SizeX * margin;
+                double offsetY = totalBounds.SizeY * margin;
+
+                // Wir erstellen eine neue, größere Box basierend auf der alten
+                var paddedBounds = new System.Windows.Media.Media3D.Rect3D(
+                    totalBounds.X - offsetX / 2,
+                    totalBounds.Y - offsetY / 2,
+                    totalBounds.Z,
+                    totalBounds.SizeX + offsetX,
+                    totalBounds.SizeY + offsetY,
+                    totalBounds.SizeZ
+                );
+
+                // Jetzt zoomen wir auf die gepufferte Box
+                viewport.ZoomExtents(paddedBounds, 0);      // "0" verhindert das Hereingleiten von links oben
+            }
+            else
+            {
+                // Fallback: Wenn wir nichts spezifisches finden, nimm alles
+                viewport.ZoomExtents();
+            }
+
+            isViewFlat = true;
+            TxtDistance.Foreground = System.Windows.Media.Brushes.DarkGreen;
+        }
+
+        // Wird automatisch aufgerufen, sobald du die Kamera mit der Maus drehst/bewegst
+        private void viewport_CameraChanged(object sender, RoutedEventArgs e)
 		{
 			if (TxtPickedCoords == null || viewport.Camera == null) return;
 
