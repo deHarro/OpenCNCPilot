@@ -105,9 +105,24 @@ namespace OpenCNCPilot
 			HeightMapApplied = false;
 
 			// Markergröße abhängig vom Layout berechnen
-			double updatedRadius = GetDynamicMarkerSize() / 2.0;
-			if (_clickMarker != null) _clickMarker.Radius = updatedRadius;
-			if (_measureMarker != null) _measureMarker.Radius = updatedRadius;
+			Dispatcher.BeginInvoke(new Action(() =>
+			{
+				if (viewport == null || viewport.Camera == null) return;
+
+				double updatedRadius = GetDynamicMarkerSize() / 2.0;
+
+				// _clickMarker sicher setzen
+				if (_clickMarker != null)
+				{
+					_clickMarker.Radius = updatedRadius;
+				}
+
+				// _measureMarker NUR setzen, wenn er auch Content hat
+				if (_measureMarker != null)
+				{
+					_measureMarker.Radius = updatedRadius;
+				}
+			}), System.Windows.Threading.DispatcherPriority.ContextIdle);
 		}
 
 		private void SaveFileDialogGCode_FileOk(object sender, System.ComponentModel.CancelEventArgs e)

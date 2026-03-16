@@ -37,9 +37,10 @@ namespace OpenCNCPilot
 
 		private Point3D? _firstMeasurePoint = null; // Speichert den ersten Klick für die Messung
 		private double _lastX, _lastY;              // Für den "Send to Manual"-Button
+		private double diagonal; 
 
 		private HelixToolkit.Wpf.SphereVisual3D _clickMarker;
-		private SphereVisual3D _measureMarker;
+		private HelixToolkit.Wpf.SphereVisual3D _measureMarker;
 
 		GCodeFile ToolPath { get; set; } = GCodeFile.Empty;
 		HeightMap Map { get; set; }
@@ -63,7 +64,6 @@ namespace OpenCNCPilot
 			AppDomain.CurrentDomain.UnhandledException += UnhandledException;
 			InitializeComponent();
 
-			// --- BRECHSTANGE START ---
 			var cam = viewport?.Camera as System.Windows.Media.Media3D.ProjectionCamera;
 			if (cam != null)
 			{
@@ -75,15 +75,14 @@ namespace OpenCNCPilot
 				// 2. Ein Fenster aufpoppen lassen (nur zum Testen!)
 				// System.Windows.MessageBox.Show(data, "Kamera beim Start");
 			}
-			// --- BRECHSTANGE ENDE ---
 
-			_clickMarker = new HelixToolkit.Wpf.SphereVisual3D { Radius = 0.5, Fill = System.Windows.Media.Brushes.Red };
+			_clickMarker   = new HelixToolkit.Wpf.SphereVisual3D { Radius = 0.5, Fill = System.Windows.Media.Brushes.Red };
 			viewport.Children.Add(_clickMarker);
-			_measureMarker = new HelixToolkit.Wpf.SphereVisual3D { Radius = startRadius, Fill = System.Windows.Media.Brushes.Blue };
+			_measureMarker = new HelixToolkit.Wpf.SphereVisual3D { Radius = 0.5, Fill = System.Windows.Media.Brushes.Blue };
 			viewport.Children.Add(_measureMarker);
 			// WICHTIG: Am Anfang unsichtbar machen, damit er nicht bei (0,0,0) im Modell schwebt
-			_measureMarker.Content = null;
-
+			//_measureMarker.Content = null;
+			//_clickMarker.Content = null;
 
 			// global variable for JoystickService, <deHarry, 2026-02-06>
 			_joystick = new OpenCNCPilot.Communication.JoystickService(
@@ -899,7 +898,7 @@ namespace OpenCNCPilot
 					double dist3D = Math.Sqrt(dx * dx + dy * dy + dz * dz);
 
 					if (TxtDistance != null)
-						TxtDistance.Text = $"Dist: {dist3D:F3}\n(X:{dx:F2} Y:{dy:F2} Z:{dz:F2})";
+						TxtDistance.Text = $"Distance: {dist3D:F3}\n(X:{dx:F2} Y:{dy:F2} Z:{dz:F2})";
 
 					// Roten Marker auf den (korrigierten) Endpunkt setzen und Größe anpassen
 					if (_clickMarker != null)
@@ -977,11 +976,12 @@ namespace OpenCNCPilot
 			double finalX = x ?? hitPoint.X;
 			double finalY = y ?? hitPoint.Y;
 
-			// Wir aktualisieren unsere Historie, damit der nächste Klick  auf diesen Werten aufbauen kann.
+			// Wir aktualisieren unsere Historie, damit der nächste Klick auf diesen Werten aufbauen kann.
 			_lastX = finalX;
 			_lastY = finalY;
 
 			// 3. Die Nadel (der rote Ball) setzen
+
 			if (_clickMarker == null)			// Falls sie durch Reset gelöscht wurde: Neu erschaffen
 			{
 				_clickMarker = new HelixToolkit.Wpf.SphereVisual3D { Fill = System.Windows.Media.Brushes.Red };
@@ -996,70 +996,23 @@ namespace OpenCNCPilot
 			SelectLineInUI(lineNumber - 1);
 		}
 
-		// Hilfsfunktion, um X/Y aus einem G-Code String zu fischen (sehr performant)
-		private bool TryParseGCodeCoords(string line, out double x, out double y)
-		{
-			x = 0; y = 0;
-			if (!line.Contains("X") && !line.Contains("Y")) return false;
-
-			try
-			{
-				var parts = line.Split(' ');
-				foreach (var p in parts)
-				{
-					if (p.StartsWith("X")) double.TryParse(p.Substring(1), System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out x);
-					if (p.StartsWith("Y")) double.TryParse(p.Substring(1), System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out y);
-				}
-				return true;
-			}
-			catch { return false; }
-		}
-
+		//----- GetDynamicMarkerSize ---------------------------------------------------
 		private double GetDynamicMarkerSize()
 		{
-			if (viewport == null || viewport.Camera == null) return;
+			// Fallback, falls noch kein G-Code geladen wurde
+			if (diagonal <= 0) return 1.0;
 
-			// 1. Blickrichtung, Orientierung sicher bestimmen
-			double targetUpX = viewport.Camera.LookDirection.X;
-			double targetUpY = viewport.Camera.LookDirection.Y;
+			// Die Logik: Der Marker soll ca. 1-2% der Modellgröße entsprechen,
+			// aber niemals kleiner als 0.3mm und niemals größer als 5mm sein.
+			double adaptiveSize = diagonal * 0.015;
 
-			// Wenn wir schon flach sind, nehmen wir das aktuelle Up
-			if (Math.Abs(targetUpX) < 0.01 && Math.Abs(targetUpY) < 0.01)
-			{
-				targetUpX = viewport.Camera.UpDirection.X;
-				targetUpY = viewport.Camera.UpDirection.Y;
-			}
-
-			Vector3D newUp = new Vector3D(targetUpX, targetUpY, 0);
-
-			// AUCH HIER: Normalisieren! 
-			if (newUp.Length > 0)
-				newUp.Normalize();
-			else
-				newUp = new Vector3D(0, 1, 0);
-
-			// Blickrichtung auf einen Standardwert (Länge egal, Hauptsache Richtung stimmt)
-			viewport.Camera.LookDirection = new Vector3D(0, 0, -1);
-			viewport.Camera.UpDirection = newUp;
-
-				// Wir erhöhen den Faktor etwas: Referenzwert 50mm statt 100mm
-				// Damit werden Marker bei großen Platinen noch deutlicher.
-				double factor = Math.Max(1.0, diagonal / 50.0);
-				double finalSize = baseSize * Math.Min(factor, 15.0);
-
-				// Debug-Ausgabe (erscheint im "Output" Fenster von Visual Studio)
-				System.Diagnostics.Debug.WriteLine($"Marker-Check: Diag={diagonal:F1}, Factor={factor:F1}, Result={finalSize:F1}");
-
-				return finalSize;
-			}
-
-			return baseSize;
+			return Math.Max(0.3, Math.Min(adaptiveSize, 5.0));
 		}
 
 		//----- ButtonLayFlatViewport ---------------------------------------------------
 		private void ButtonLayFlatViewport_Click(object sender, RoutedEventArgs e)
         {
-            if (viewport == null || viewport.Camera == null) return;
+           if (viewport == null || viewport.Camera == null) return;
 
             // --- NEU: ORIENTIERUNG BEIBEHALTEN ---
             // Wir schauen, in welche Richtung die Kamera horizontal blickt (X und Y).
@@ -1162,7 +1115,7 @@ namespace OpenCNCPilot
 				isViewFlat = false;
 				TxtPickedCoords.Foreground = System.Windows.Media.Brushes.Gray;
 				TxtPickedCoords.Text = "X: --- | Y: --- (3D-Modus)";
-				TxtDistance.Text = "Abstand: ---";
+				TxtDistance.Text = "Distance: ---";
 			}
 		}
 
@@ -1386,6 +1339,47 @@ namespace OpenCNCPilot
 					}
 				}
 
+				double newMarkerRadius = 0.5; // Absoluter Notfall-Fallback
+
+				if (!totalBounds.IsEmpty)
+				{
+					// Diagonale des aktuell sichtbaren Modells berechnen
+					diagonal = Math.Sqrt(Math.Pow(totalBounds.SizeX, 2) + Math.Pow(totalBounds.SizeY, 2) + Math.Pow(totalBounds.SizeZ, 2));
+
+					// Basiswert aus Settings holen (MarkerSize)
+					double baseFromSettings = Properties.Settings.Default.MarkerSize;
+					if (baseFromSettings <= 0) baseFromSettings = 0.5;
+
+					// 2. Die Berechnung (Linearer Ansatz)
+					// Wir lassen den Marker pro 100mm Diagonale um einen festen Prozentsatz wachsen.
+					// Beispiel: 0.2 (20%) Zuwachs pro 100mm.
+					if (diagonal > 1.0)
+					{
+						double growthRate = 0.2;
+						double growthFactor = 1.0 + (diagonal / 100.0 * growthRate);
+
+					// 3. Verrechnung
+						newMarkerRadius = baseFromSettings * growthFactor;
+					}
+					else
+					{
+						// Fallback: Nur der Setting-Wert, wenn kein Modell da ist
+						newMarkerRadius = baseFromSettings;
+					}
+					// 4. Leitplanken (Sicherheit geht vor)
+					newMarkerRadius = Math.Max(0.1, Math.Min(newMarkerRadius, 4.0));
+				}
+				else
+				{
+					diagonal = 0;
+					newMarkerRadius = Properties.Settings.Default.MarkerSize;
+				}
+				
+				// Radien anwenden
+				if (_clickMarker != null) _clickMarker.Radius = newMarkerRadius;
+				if (_measureMarker != null) _measureMarker.Radius = newMarkerRadius;
+				// ----------------------------------------
+
 				// 3. Gezielter Zoom (EXAKT DEIN CODE)
 				if (!totalBounds.IsEmpty)
 				{
@@ -1424,36 +1418,6 @@ namespace OpenCNCPilot
 			int steps = (rotationAngle / 90) % 4;
 
 			string[] finalLines;
-
-			//if (steps > 0)
-			//{
-			//	// Wir nutzen den "Clumsy"-Weg, weil er der EINZIGE ist, den dein GCodeFile-Typ frisst
-			//	string tempPath = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "ocp_rotate_temp.nc");
-
-			//	try
-			//	{
-			//		System.IO.File.WriteAllText(tempPath, totalGCode);
-
-			//		// Das hier akzeptiert dein Compiler (haben wir oben gesehen)
-			//		var tempFile = GCodeFile.Load(tempPath);
-
-			//		for (int i = 0; i < steps; i++)
-			//		{
-			//			tempFile.RotateCW();
-			//		}
-
-			//		finalLines = tempFile.GetGCode().ToArray();
-			//	}
-			//	finally
-			//	{
-			//		// Sofort löschen, damit kein Müll bleibt
-			//		if (System.IO.File.Exists(tempPath)) System.IO.File.Delete(tempPath);
-			//	}
-			//}
-			//else
-			//{
-			//	finalLines = totalGCode.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.None);
-			//}
 
 			if (steps > 0)
 			{
