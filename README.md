@@ -15,7 +15,7 @@ Background: With pcb-gcode.ulp there is always the risk that the text is hampere
 Zooming and panning the design afterwards is ok, tilting or rotating should be omitted when trying to measure distances or finding the g-code line in the viewport. But it works even then - only the aiming is more difficult.
 - Moved the new features from "Debug" to "Inspection & Measurement" (just below "About").
 - The g-code line is highlighted and moved into view in the file listbox when clicking on a line (or a drill or an arc) in the viewport .
-- The click point in the viewport is marked with a red ball. The ball is placed on the end of the current line.
+- The click point in the viewport is marked with a red ball. The ball is placed on the **end** of the current line.
 - The coords of the click point can be transferred to the "manual input" to make the machine move to this point. When issuing "send" the tool is first raised to Z=5 for security.
 Background: This feature is helpful when you have to adjust the machine to the design after a broken job. Perhaps you have already drilled the holes? Then you can select one of the holes, get its coordinates (from the file listbox), move the machine to that point and manually adjust the machine or the board to match the given hole. Back in the game :)
 - When measuring distances, two markers are placed in the viewport, blue for the first, red for the second clickpoint.
