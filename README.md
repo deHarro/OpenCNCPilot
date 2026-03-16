@@ -12,20 +12,20 @@ In this Repo I added some gadgets and goodies to the original OpenCNCPilot (OCP)
 - Added a "reload" feature for one or all loaded files. This is extremely useful when iterating a design with text on the solder side.
 Background: With pcb-gcode.ulp there is always the risk that the text is hampered or even removed by the tracks around traces. So one has to change and judge the result in OCP. Together with the new layer feature (load etch-layer and text-layer and view both superimposed) the check is done in no time and even quicker with the "reload" feature.
 - Added a means of measuring the distance between two points in the viewport. This feature is restricted to designs layed flat on the X/Y plane. This in turn is realized by a feature I implemented back in 2021 or so, a button named "Lay flat 3D Viewport", located in the Debug box.
-Zooming and panning the design is ok, tilting or rotating should be omitted when trying to measure distances or finding the g-code line in the viewport.
+Zooming and panning the design afterwards is ok, tilting or rotating should be omitted when trying to measure distances or finding the g-code line in the viewport. But it works even then - only the aiming is more difficult.
 - Moved the new features from "Debug" to "Inspection & Measurement" (just below "About").
 - The g-code line is highlighted and moved into view in the file listbox when clicking on a line (or a drill or an arc) in the viewport .
-- The click point in the viewport is marked with a red ball. The ball is placed on the end of the current line.
+- The click point in the viewport is marked with a red ball. The ball is placed on the **end** of the current line.
 - The coords of the click point can be transferred to the "manual input" to make the machine move to this point. When issuing "send" the tool is first raised to Z=5 for security.
 Background: This feature is helpful when you have to adjust the machine to the design after a broken job. Perhaps you have already drilled the holes? Then you can select one of the holes, get its coordinates (from the file listbox), move the machine to that point and manually adjust the machine or the board to match the given hole. Back in the game :)
 - When measuring distances, two markers are placed in the viewport, blue for the first, red for the second clickpoint.
 - Holding SHIFT when clicking the second point in measuring mode nails the X or the Y coordinate to match the first point. Weighted decision for which axis is retained (the bigger distance determines the fixed axis).
 - The size of the markers (blue and red) is adjustable via "Settings - Viewport - Marker diameter".
-- adapted marker size to layout size
-- changed Tooltip for RO (rotate origin) button
-- nailed the viewport orientation to the saved settings for RO ("rotate origin" in Debug box) and RotateCW ("rotate clockwise" in Edit box)
+- Adapted marker size to layout size
+- Changed Tooltip for RO (rotate origin) button
+- Nailed the viewport orientation to the saved settings for RO ("rotate origin" in Debug box) and RotateCW ("rotate clockwise" in Edit box)
 
-**Some of the new features are under construction still, namely the measuring feature. 
+**Some of the new features are under construction still.<br>
 There may be errors and flaws, use at your own risk in productive environment!**
 
 I signed my modifications via "Mod: Vx.y, deHarro" in the About Box, leaving the original versioning of Martin alone.
