@@ -21,9 +21,9 @@ Background: This feature is helpful when you have to adjust the machine to the d
 - When measuring distances, two markers are placed in the viewport, blue for the first, red for the second clickpoint.
 - Holding SHIFT when clicking the second point in measuring mode nails the X or the Y coordinate to match the first point. Weighted decision for which axis is retained (the bigger distance determines the fixed axis).
 - The size of the markers (blue and red) is adjustable via "Settings - Viewport - Marker diameter".
-- adapted marker size to layout size
-- changed Tooltip for RO (rotate origin) button
-- nailed the viewport orientation to the saved settings for RO ("rotate origin" in Debug box) and RotateCW ("rotate clockwise" in Edit box)
+- Adapted marker size to layout size
+- Changed Tooltip for RO (rotate origin) button
+- Nailed the viewport orientation to the saved settings for RO ("rotate origin" in Debug box) and RotateCW ("rotate clockwise" in Edit box)
 
 **Some of the new features are under construction still, namely the measuring feature. 
 There may be errors and flaws, use at your own risk in productive environment!**
