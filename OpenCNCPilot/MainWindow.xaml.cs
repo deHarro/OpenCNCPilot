@@ -80,9 +80,6 @@ namespace OpenCNCPilot
 			viewport.Children.Add(_clickMarker);
 			_measureMarker = new HelixToolkit.Wpf.SphereVisual3D { Radius = 0.5, Fill = System.Windows.Media.Brushes.Blue };
 			viewport.Children.Add(_measureMarker);
-			// WICHTIG: Am Anfang unsichtbar machen, damit er nicht bei (0,0,0) im Modell schwebt
-			//_measureMarker.Content = null;
-			//_clickMarker.Content = null;
 
 			// global variable for JoystickService, <deHarry, 2026-02-06>
 			_joystick = new OpenCNCPilot.Communication.JoystickService(
@@ -669,72 +666,6 @@ namespace OpenCNCPilot
 			return null;
 		}
 
-
-		private void HandleGCodeMapping(RayMeshGeometry3DHitTestResult meshHit)
-		{
-			var hitVisual = meshHit.VisualHit;
-			if (hitVisual == null) return;
-
-			// 1. Das Ziel-Visual im Mapping finden (Baum-Suche für Gruppen/Modelle)
-			Visual3D target = null;
-			DependencyObject parent = hitVisual;
-			while (parent != null)
-			{
-				if (parent is Visual3D v3d && _lineMapping.ContainsKey(v3d))
-				{
-					target = v3d;
-					break;
-				}
-				parent = VisualTreeHelper.GetParent(parent);
-			}
-
-			if (target != null)
-			{
-				// 2. Index-Berechnung (Lines = 2 Punkte, Quads = 4 Punkte)
-				int divisor = (target is HelixToolkit.Wpf.QuadVisual3D) ? 4 : 2;
-				int segmentIndex = meshHit.VertexIndex1 / divisor;
-
-				var indices = _lineMapping[target];
-
-				if (segmentIndex >= 0 && segmentIndex < indices.Count)
-				{
-					// 3. 1-basierte Zeilennummer aus dem Mapping holen
-					int lineNumber = indices[segmentIndex];
-
-					// 4. Daten-Extraktion aus der geladenen Datei
-					if (lineNumber > 0 && lineNumber <= machine.File.Count)
-					{
-						string gcodeLine = machine.File[lineNumber - 1];
-
-						// Koordinaten aus dem Text parsen
-						double? x = GetCoord(gcodeLine, 'X');
-						double? y = GetCoord(gcodeLine, 'Y');
-
-						// Globale Variablen für "Send to Manual" aktualisieren
-						if (x.HasValue) _lastX = x.Value;
-						if (y.HasValue) _lastY = y.Value;
-
-						// --- DIE VISUELLE NADEL ---
-						if (_clickMarker != null)
-						{
-							// Wir setzen die Nadel auf die exakten G-Code-Koordinaten
-							// Z nehmen wir vom Klick-Punkt, damit sie nicht "im Boden" versinkt
-							_clickMarker.Center = new Point3D(_lastX, _lastY, meshHit.PointHit.Z + 0.2);
-						}
-
-						System.Diagnostics.Debug.WriteLine($"KLICK: Seg-{segmentIndex} -> Zeile {lineNumber}: {gcodeLine} (Nadel bei X{_lastX} Y{_lastY})");
-
-						// 5. UI-Synchronisation (Scrollen und Markieren)
-						SelectLineInUI(lineNumber - 1);
-					}
-				}
-			}
-			else
-			{
-				System.Diagnostics.Debug.WriteLine("Kein Mapping für dieses Objekt gefunden.");
-			}
-		}
-
 		private void SelectLineInUI(int lineNumber)
 		{
 			// Wir prüfen zuerst, ob die File-Box (ListBox) überhaupt da ist.
@@ -763,7 +694,6 @@ namespace OpenCNCPilot
 				}
 			}
 		}
-
 
 		private void viewport_MouseDown(object sender, MouseButtonEventArgs e)
 		{
@@ -868,6 +798,7 @@ namespace OpenCNCPilot
 					{
 						_clickMarker.Radius = currentRadius;
 						_clickMarker.Center = pointToUse;
+						_clickMarker.Visible = true;
 					}
 				}
 				else
@@ -905,6 +836,7 @@ namespace OpenCNCPilot
 					{
 						_clickMarker.Radius = currentRadius;
 						_clickMarker.Center = p2;
+						_clickMarker.Visible = true;
 					}
 
 					_firstMeasurePoint = null;
@@ -917,20 +849,6 @@ namespace OpenCNCPilot
 			{
 				ProcessSelection(bestLineNumber, bestHitPoint);
 			}
-		}
-
-		// Diese Hilfsfunktion gehört direkt unter die MouseDown-Routine
-		private bool IsVisualInMapping(DependencyObject visual)
-		{
-			DependencyObject current = visual;
-			while (current != null)
-			{
-				if (current is Visual3D v3d && _lineMapping.ContainsKey(v3d))
-					return true;
-
-				current = VisualTreeHelper.GetParent(current);
-			}
-			return false;
 		}
 
 		private Point Point3DToPoint2D(Point3D p)
@@ -990,7 +908,8 @@ namespace OpenCNCPilot
 
 			// Größe aus Settings holen
 			_clickMarker.Radius = GetDynamicMarkerSize() / 2.0;
-			_clickMarker.Center = new Point3D(finalX, finalY, Math.Max(hitPoint.Z, 0) + 1.0);			
+			_clickMarker.Center = new Point3D(finalX, finalY, 0);   // Kugelmarker in die Platinenebene legen -> keine Parallaxe
+			_clickMarker.Visible = true;
 
 			// 4. UI-Synchronisation
 			SelectLineInUI(lineNumber - 1);
@@ -1302,7 +1221,6 @@ namespace OpenCNCPilot
 			}
 		} // Ende GCodeLayer
 
-		// In MainWindow.xaml.cs einfügen
 		public void ApplyGlobalViewportStandard()
 		{
 
@@ -1367,17 +1285,25 @@ namespace OpenCNCPilot
 						newMarkerRadius = baseFromSettings;
 					}
 					// 4. Leitplanken (Sicherheit geht vor)
-					newMarkerRadius = Math.Max(0.1, Math.Min(newMarkerRadius, 4.0));
+					newMarkerRadius = Math.Max(0.5, Math.Min(newMarkerRadius, 4.0));
 				}
 				else
 				{
 					diagonal = 0;
 					newMarkerRadius = Properties.Settings.Default.MarkerSize;
 				}
-				
+
 				// Radien anwenden
-				if (_clickMarker != null) _clickMarker.Radius = newMarkerRadius;
-				if (_measureMarker != null) _measureMarker.Radius = newMarkerRadius;
+				if (_clickMarker != null)
+				{ 
+					_clickMarker.Radius = newMarkerRadius; 
+					_clickMarker.Visible = false; 
+				}
+				if (_measureMarker != null)
+				{
+					_measureMarker.Radius = newMarkerRadius;
+					_measureMarker.Visible = false;
+				}
 				// ----------------------------------------
 
 				// 3. Gezielter Zoom (EXAKT DEIN CODE)
