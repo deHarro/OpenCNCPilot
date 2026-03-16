@@ -12,7 +12,7 @@ In this Repo I added some gadgets and goodies to the original OpenCNCPilot (OCP)
 - Added a "reload" feature for one or all loaded files. This is extremely useful when iterating a design with text on the solder side.
 Background: With pcb-gcode.ulp there is always the risk that the text is hampered or even removed by the tracks around traces. So one has to change and judge the result in OCP. Together with the new layer feature (load etch-layer and text-layer and view both superimposed) the check is done in no time and even quicker with the "reload" feature.
 - Added a means of measuring the distance between two points in the viewport. This feature is restricted to designs layed flat on the X/Y plane. This in turn is realized by a feature I implemented back in 2021 or so, a button named "Lay flat 3D Viewport", located in the Debug box.
-Zooming and panning the design is ok, tilting or rotating should be omitted when trying to measure distances or finding the g-code line in the viewport.
+Zooming and panning the design afterwards is ok, tilting or rotating should be omitted when trying to measure distances or finding the g-code line in the viewport. But it works even then - only the aiming is more difficult.
 - Moved the new features from "Debug" to "Inspection & Measurement" (just below "About").
 - The g-code line is highlighted and moved into view in the file listbox when clicking on a line (or a drill or an arc) in the viewport .
 - The click point in the viewport is marked with a red ball. The ball is placed on the end of the current line.
