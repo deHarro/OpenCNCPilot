@@ -64,7 +64,6 @@ namespace OpenCNCPilot
 			AppDomain.CurrentDomain.UnhandledException += UnhandledException;
 			InitializeComponent();
 
-			// --- BRECHSTANGE START ---
 			var cam = viewport?.Camera as System.Windows.Media.Media3D.ProjectionCamera;
 			if (cam != null)
 			{
@@ -76,7 +75,6 @@ namespace OpenCNCPilot
 				// 2. Ein Fenster aufpoppen lassen (nur zum Testen!)
 				// System.Windows.MessageBox.Show(data, "Kamera beim Start");
 			}
-			// --- BRECHSTANGE ENDE ---
 
 			_clickMarker = new HelixToolkit.Wpf.SphereVisual3D { Radius = 0.5, Fill = System.Windows.Media.Brushes.Red };
 			viewport.Children.Add(_clickMarker);
@@ -913,7 +911,7 @@ namespace OpenCNCPilot
 					double dist3D = Math.Sqrt(dx * dx + dy * dy + dz * dz);
 
 					if (TxtDistance != null)
-						TxtDistance.Text = $"Dist: {dist3D:F3}\n(X:{dx:F2} Y:{dy:F2} Z:{dz:F2})";
+						TxtDistance.Text = $"Distance: {dist3D:F3}\n(X:{dx:F2} Y:{dy:F2} Z:{dz:F2})";
 
 					// Roten Marker auf den (korrigierten) Endpunkt setzen und Größe anpassen
 					if (_clickMarker != null)
@@ -984,16 +982,6 @@ namespace OpenCNCPilot
 			_lastY = finalY;
 
 			// 3. Die Nadel (der rote Ball) setzen
-/*			if (_clickMarker != null)
-			{
-				// Wir setzen die Nadel auf die ermittelte Position.
-				// Z setzen wir etwas höher (z.B. +1.0), damit der Ball nicht 
-				// zur Hälfte im Werkstück verschwindet.
-				double displayZ = Math.Max(hitPoint.Z, 0) + 1.0;
-
-				_clickMarker.Center = new Point3D(finalX, finalY, displayZ);
-			}
-*/
 			if (_clickMarker == null) // Falls sie durch Reset gelöscht wurde: Neu erschaffen
 			{
 				_clickMarker = new HelixToolkit.Wpf.SphereVisual3D { Fill = System.Windows.Media.Brushes.Red };
@@ -1087,45 +1075,6 @@ namespace OpenCNCPilot
 			}
 			catch { return false; }
 		}
-
-		/*
-				private void JumpToNearestGCodeLine(System.Windows.Media.Media3D.Point3D clickPoint)
-				{
-					int bestIndex = -1;
-					double minDistance = 1.0; // 1mm Toleranz
-
-					// Wir gehen durch alle Einträge, die gerade in deiner ListViewFile angezeigt werden
-					for (int i = 0; i < ListViewFile.Items.Count; i++)
-					{
-						// OCP speichert hier oft Objekte vom Typ 'GCodeLine'
-						var line = ListViewFile.Items[i];
-
-						// Jetzt kommt der "Hack": Wir versuchen die Koordinaten aus dem Objekt zu lesen
-						// Da ich die genaue Klasse nicht kenne, nutzen wir eine vorsichtige Prüfung:
-						dynamic cmd = line;
-						try
-						{
-							double dx = clickPoint.X - (double)cmd.X;
-							double dy = clickPoint.Y - (double)cmd.Y;
-							double d = Math.Sqrt(dx * dx + dy * dy);
-
-							if (d < minDistance)
-							{
-								minDistance = d;
-								bestIndex = i;
-							}
-						}
-						catch { // Falls das Objekt kein X/Y hat, ignorieren wir es
-						}
-					}
-
-					if (bestIndex != -1)
-					{
-						ListViewFile.SelectedIndex = bestIndex;
-						ListViewFile.ScrollIntoView(ListViewFile.SelectedItem);
-					}
-				}
-		*/
 
 		// ----- ButtonLayFlatViewport ---------------------------------------------------
 		private void ButtonLayFlatViewport_Click(object sender, RoutedEventArgs e)
@@ -1230,7 +1179,7 @@ namespace OpenCNCPilot
 				isViewFlat = false;
 				TxtPickedCoords.Foreground = System.Windows.Media.Brushes.Gray;
 				TxtPickedCoords.Text = "X: --- | Y: --- (3D-Modus)";
-				TxtDistance.Text = "Abstand: ---";
+				TxtDistance.Text = "Distance: ---";
 			}
 		}
 
