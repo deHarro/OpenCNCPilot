@@ -25,7 +25,7 @@ Background: This feature is helpful when you have to adjust the machine to the d
 - Changed Tooltip for RO (rotate origin) button
 - Nailed the viewport orientation to the saved settings for RO ("rotate origin" in Debug box) and RotateCW ("rotate clockwise" in Edit box)
 
-**Some of the new features are under construction still, namely the measuring feature. 
+**Some of the new features are under construction still.<br>
 There may be errors and flaws, use at your own risk in productive environment!**
 
 I signed my modifications via "Mod: Vx.y, deHarro" in the About Box, leaving the original versioning of Martin alone.
