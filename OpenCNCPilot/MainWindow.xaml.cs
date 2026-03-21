@@ -64,18 +64,6 @@ namespace OpenCNCPilot
 			AppDomain.CurrentDomain.UnhandledException += UnhandledException;
 			InitializeComponent();
 
-			var cam = viewport?.Camera as System.Windows.Media.Media3D.ProjectionCamera;
-			if (cam != null)
-			{
-				string data = $"Pos: {cam.Position}\nDir: {cam.LookDirection}\nUp: {cam.UpDirection}";
-
-				// 1. In das Debug-Fenster schreiben
-				System.Diagnostics.Trace.WriteLine("!!! KAMERA DEBUG !!!\n" + data);
-
-				// 2. Ein Fenster aufpoppen lassen (nur zum Testen!)
-				// System.Windows.MessageBox.Show(data, "Kamera beim Start");
-			}
-
 			_clickMarker   = new HelixToolkit.Wpf.SphereVisual3D { Radius = 0.5, Fill = System.Windows.Media.Brushes.Red };
 			viewport.Children.Add(_clickMarker);
 			_measureMarker = new HelixToolkit.Wpf.SphereVisual3D { Radius = 0.5, Fill = System.Windows.Media.Brushes.Blue };
@@ -678,7 +666,6 @@ namespace OpenCNCPilot
 					ListViewFile.SelectedIndex = lineNumber;
 
 					// 2. Die Liste automatisch dorthin scrollen, damit die Zeile sichtbar ist
-					//ListViewFile.ScrollIntoView(ListViewFile.Items[lineNumber]);
 					// Wir zwingen das Scrollen in die nächste UI-Verarbeitungsschleife
 					Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.ContextIdle, new Action(() =>
 					{
@@ -697,7 +684,7 @@ namespace OpenCNCPilot
 
 		private void viewport_MouseDown(object sender, MouseButtonEventArgs e)
 		{
-			// PINZETTE: Nur weitermachen, wenn einer der Modi wirklich aktiv ist
+			// Nur weitermachen, wenn einer der Modi wirklich aktiv ist
 			bool messModusAktiv = BtnMeasure?.IsChecked == true;
 			bool linkModusAktiv = BtnLinkToFile?.IsChecked == true;
 
@@ -759,7 +746,7 @@ namespace OpenCNCPilot
 					pointToUse = new Point3D(0, 0, 0); // Letzter Ausweg
 			}
 
-			// 3. Die Mess-Logik mit DEINEM BtnMeasure
+			// 3. Die Mess-Logik mit BtnMeasure
 			if (BtnMeasure.IsChecked == true)
 			{
 				// Radius einmal zentral für diesen Klick berechnen
@@ -933,7 +920,7 @@ namespace OpenCNCPilot
         {
            if (viewport == null || viewport.Camera == null) return;
 
-            // --- NEU: ORIENTIERUNG BEIBEHALTEN ---
+            // --- ORIENTIERUNG BEIBEHALTEN ---
             // Wir schauen, in welche Richtung die Kamera horizontal blickt (X und Y).
             // Das ist die Richtung, die der User mit "ButtonRotateOrigin" eingestellt hat.
             double targetUpX = viewport.Camera.LookDirection.X;
@@ -1229,7 +1216,7 @@ namespace OpenCNCPilot
 			// Wir bleiben beim bewährten ContextIdle
 			this.Dispatcher.InvokeAsync(() =>
 			{
-				// 1. Kamera-Konflikt lösen (EXAKT DEIN CODE)
+				// 1. Kamera-Konflikt lösen
 				if (viewport.Camera is System.Windows.Media.Media3D.ProjectionCamera cam)
 				{
 					// Nur eingreifen, wenn Look und Up fast parallel sind (Z-Z-Bug)
@@ -1326,8 +1313,8 @@ namespace OpenCNCPilot
 				}
 				else
 				{
-					// NEU: Falls kein G-Code da ist (Start), zeige den Tisch-Ursprung
-					// Damit verhinderst du, dass man beim Start ins Leere schaut.
+					// Falls kein G-Code da ist (Start), zeige den Tisch-Ursprung
+					// verhindert, dass man beim Start ins Leere schaut.
 					viewport.ZoomExtents(new System.Windows.Media.Media3D.Rect3D(-10, -10, 0, 120, 120, 1), 0);
 				}
 			}, System.Windows.Threading.DispatcherPriority.ContextIdle);
@@ -1335,61 +1322,21 @@ namespace OpenCNCPilot
 
 		private void SyncMachineWithLayers()
 		{
-			// 1. G-Code zusammenbauen
+			// 1. G-Code aus allen aktiven Layern zusammenbauen
 			string totalGCode = GetCombinedGCode();
 			if (string.IsNullOrWhiteSpace(totalGCode)) return;
 
-			// 2. Rotation vorbereiten
-			int rotationAngle = Properties.Settings.Default.GCodeRotation;
-			int steps = (rotationAngle / 90) % 4;
+			// 2. Zeilen splitten
+			string[] finalLines = totalGCode.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.None);
 
-			string[] finalLines;
-
-			if (steps > 0)
-			{
-				string tempPath1 = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "ocp_rotate_in.nc");
-				string tempPath2 = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "ocp_rotate_out.nc");
-
-				System.IO.File.WriteAllText(tempPath1, totalGCode);
-
-				var tempFile = GCodeFile.Load(tempPath1);
-
-				for (int i = 0; i < steps; i++)
-				{
-					tempFile.RotateCW();
-				}
-
-				// Da 'Commands' nicht existiert, nutzen wir Martins 'Save'-Methode.
-				// Diese Methode MUSS die rotierten Koordinaten in Text umwandeln.
-				tempFile.Save(tempPath2);
-
-				// Jetzt lesen wir die fertig rotierten Zeilen einfach wieder ein
-				finalLines = System.IO.File.ReadAllLines(tempPath2);
-
-				// Aufräumen
-				if (System.IO.File.Exists(tempPath1)) System.IO.File.Delete(tempPath1);
-				if (System.IO.File.Exists(tempPath2)) System.IO.File.Delete(tempPath2);
-			}
-			else
-			{
-				finalLines = totalGCode.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.None);
-			}
-
-			// 3. Der Maschine übergeben
+			// 3. Der Maschine übergeben (Das triggert den internen Parser)
 			machine.SetFile(finalLines);
 
 			// 4. UI-Längenanzeige
-			RunFileLength.Text = finalLines.Length.ToString();
+			if (RunFileLength != null)
+				RunFileLength.Text = finalLines.Length.ToString();
 
-			// A. Den internen GCode-Status der Maschine aktualisieren
-			// Das zwingt die Listbox oft dazu, ihren Index neu aufzubauen
-			machine.GetType().GetMethod("OnFileUpdated")?.Invoke(machine, null);
-
-			// B. Den Viewport (3D) zum Neuzeichnen zwingen
-			// Wir rufen deine vorhandene Zoom-Funktion auf, die meistens auch ein Redraw auslöst
-			ApplyGlobalViewportStandard();
-
-			// 5. Memory-Leak-Bremse für PCB (30k+ Lines)
+			// 5. Memory-Leak-Bremse für große PCB-Dateien
 			if (finalLines.Length > 20000)
 			{
 				GC.Collect(1);

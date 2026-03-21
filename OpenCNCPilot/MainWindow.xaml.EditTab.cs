@@ -91,7 +91,15 @@ namespace OpenCNCPilot
 
 			try
 			{
+				// 1. Das ToolPath-Objekt sofort rotieren und den G-Code an die Maschine (und den Viewport) senden.
 				machine.SetFile(ToolPath.RotateCW().GetGCode());
+
+				// 2. Wir berechnen den neuen Winkel (0 -> 90 -> 180 -> 270 -> 0)
+				int newRotation = (Properties.Settings.Default.GCodeRotation + 90) % 360;
+
+				// Den Wert in den Settings aktualisieren und SOFORT speichern
+				Properties.Settings.Default.GCodeRotation = newRotation;
+				Properties.Settings.Default.Save();
 			}
 			catch (Exception ex)
 			{

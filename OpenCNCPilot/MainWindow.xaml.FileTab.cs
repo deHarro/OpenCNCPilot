@@ -12,7 +12,7 @@ namespace OpenCNCPilot
 {
 	partial class MainWindow
 	{
-		
+
 		private string _currentFileName = "";
 
 		public string CurrentFileName
@@ -84,8 +84,8 @@ namespace OpenCNCPilot
 				AllLayers.Add(new GCodeLayer
 				{
 					Name = System.IO.Path.GetFileName(openFileDialogGCode.FileName),
-                    Filename = openFileDialogGCode.FileName,
-                    Content = newLines,
+					Filename = openFileDialogGCode.FileName,
+					Content = newLines,
 					IsActive = true
 				});
 
@@ -227,8 +227,8 @@ namespace OpenCNCPilot
 				var layer = AllLayers[i] as GCodeLayer;
 				if (layer != null)
 				{
-					layer.IsNotFirst = (i > 0);						// Erster bekommt false
-					layer.IsNotLast = (i < AllLayers.Count - 1);	// Letzter bekommt false
+					layer.IsNotFirst = (i > 0);                     // Erster bekommt false
+					layer.IsNotLast = (i < AllLayers.Count - 1);    // Letzter bekommt false
 				}
 			}
 
@@ -259,10 +259,10 @@ namespace OpenCNCPilot
 				UpdateLayerDisplay();
 
 				// 2. Den kombinierten Code neu berechnen und an die Maschine/Viewer senden
-				LayerCheckBox_Click(null, null);
+				//LayerCheckBox_Click(null, null);
 
-				// Optional: Ein kurzer Hinweis, dass es geklappt hat
-				// MessageBox.Show("Alle Layer wurden neu geladen!");
+				// Rufe direkt das Finale auf, ohne Umweg über LayerCheckBox_Click
+				FinalizeGCodeLoading();
 			}
 			catch (Exception ex)
 			{
@@ -391,10 +391,11 @@ namespace OpenCNCPilot
 
 		private void FinalizeGCodeLoading()
 		{
-			// 1. Alles zusammenbauen
+			// 1. Alles zusammenbauen (unrotiert)
 			SyncMachineWithLayers();
 
-			// 2. Rotation verzögert ausführen (wegen des Timing-Problems)
+			// 2. Die Rotation verzögert ausführen
+			// Wir warten, bis der Dispatcher "Idle" ist, also OCP mit dem ersten Parser-Lauf fertig ist.
 			int winkel = Properties.Settings.Default.GCodeRotation;
 			if (winkel > 0 && winkel < 360)
 			{
@@ -402,17 +403,14 @@ namespace OpenCNCPilot
 				Dispatcher.BeginInvoke(new Action(() => {
 					for (int i = 0; i < schritte; i++)
 					{
-						ButtonEditRotateCW_Click(null, null);
+						// Wir rufen die Logik direkt auf, OHNE das Setting zu verändern
+						if (ToolPath != null)
+						{
+							machine.SetFile(ToolPath.RotateCW().GetGCode());
+						}
 					}
 					ApplyGlobalViewportStandard();
-				}), System.Windows.Threading.DispatcherPriority.ContextIdle);
-			}
-			else
-			{
-				// Auch ohne Rotation zentrieren, sobald die UI idle ist
-				Dispatcher.BeginInvoke(new Action(() => {
-					ApplyGlobalViewportStandard();
-				}), System.Windows.Threading.DispatcherPriority.ContextIdle);
+				}), System.Windows.Threading.DispatcherPriority.ApplicationIdle);
 			}
 		}
 	}
