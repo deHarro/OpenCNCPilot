@@ -401,7 +401,7 @@
                                         <Hyperlink RequestNavigate="Hyperlink_RequestNavigate" NavigateUri="https://github.com/deHarro/OpenCNCPilot" TextDecorations="None">Mod: deHarro</Hyperlink>
                                     </TextBlock>
 
-                                    <TextBlock Text=" - v1.9, 2026-03-15" 
+                                    <TextBlock Text=" - v1.10, 2026-03-21" 
                                        Foreground="Gray" 
                                        FontSize="10" />
                                 </StackPanel>
@@ -428,6 +428,7 @@
                                                 </TextBlock>
                                                 <TextBlock Text="v1.8: Fix Rotate Origin, fix Lay-Flat"/>
                                                 <TextBlock Text="v1.9: Save Viewport Orientation in Settings and set Design accordingly"/>
+                                                <TextBlock Text="v1.10: Fix Rotation logic and synchronization timing"/>
                                             </StackPanel>
                                         </TextBlock>
                                     </ToolTip>
