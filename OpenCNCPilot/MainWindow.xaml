@@ -401,7 +401,7 @@
                                         <Hyperlink RequestNavigate="Hyperlink_RequestNavigate" NavigateUri="https://github.com/deHarro/OpenCNCPilot" TextDecorations="None">Mod: deHarro</Hyperlink>
                                     </TextBlock>
 
-                                    <TextBlock Text=" - v1.10, 2026-03-21" 
+                                    <TextBlock Text=" - v1.11, 2026-03-24" 
                                        Foreground="Gray" 
                                        FontSize="10" />
                                 </StackPanel>
@@ -429,6 +429,7 @@
                                                 <TextBlock Text="v1.8: Fix Rotate Origin, fix Lay-Flat"/>
                                                 <TextBlock Text="v1.9: Save Viewport Orientation in Settings and set Design accordingly"/>
                                                 <TextBlock Text="v1.10: Fix Rotation logic and synchronization timing"/>
+                                                <TextBlock Text="v1.11: Fix display of Limit and Probe notifications"/>
                                             </StackPanel>
                                         </TextBlock>
                                     </ToolTip>
@@ -573,7 +574,7 @@
                 </ListBox.ItemsPanel>
             </ListBox>
         </Grid>
-        <StackPanel Panel.ZIndex="2" VerticalAlignment="Bottom" HorizontalAlignment="Center" Orientation="Horizontal" Margin="-8,0,8,0" Grid.Column="2" Height="0" Width="0">
+        <StackPanel Panel.ZIndex="2" VerticalAlignment="Bottom" HorizontalAlignment="Center" Orientation="Horizontal" Margin="446,0,420,0">
             <Label Name="LabelStateProbe" Content="Probe" FontWeight="ExtraBold" FontSize="40" Foreground="Red" Visibility="Collapsed"/>
             <Label Name="LabelStateLimitX" Content="LimitX" FontWeight="ExtraBold" FontSize="40" Foreground="Red" Visibility="Collapsed"/>
             <Label Name="LabelStateLimitY" Content="LimitY" FontWeight="ExtraBold" FontSize="40" Foreground="Red" Visibility="Collapsed"/>

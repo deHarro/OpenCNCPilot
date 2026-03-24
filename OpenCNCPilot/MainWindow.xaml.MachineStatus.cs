@@ -404,10 +404,17 @@ Be aware that the affected lines will likely move when using edit functions." + 
 
 		private void Machine_PinStateChanged()
 		{
-			LabelStateLimitX.Visibility = machine.PinStateLimitX ? Visibility.Visible : Visibility.Collapsed;
-			LabelStateLimitY.Visibility = machine.PinStateLimitY ? Visibility.Visible : Visibility.Collapsed;
-			LabelStateLimitZ.Visibility = machine.PinStateLimitZ ? Visibility.Visible : Visibility.Collapsed;
-			LabelStateProbe.Visibility = machine.PinStateProbe ? Visibility.Visible : Visibility.Collapsed;
+			// Wir schicken den Code zur Ausführung an den UI-Thread
+			Dispatcher.BeginInvoke(new Action(() =>
+			{
+				LabelStateLimitX.Visibility = machine.PinStateLimitX ? Visibility.Visible : Visibility.Collapsed;
+				LabelStateLimitY.Visibility = machine.PinStateLimitY ? Visibility.Visible : Visibility.Collapsed;
+				LabelStateLimitZ.Visibility = machine.PinStateLimitZ ? Visibility.Visible : Visibility.Collapsed;
+				LabelStateProbe.Visibility = machine.PinStateProbe ? Visibility.Visible : Visibility.Collapsed;
+
+				// Debug-Hilfe: Falls es immer noch nicht geht, nimm das hier mal rein:
+				System.Diagnostics.Debug.WriteLine($"Probe UI updated: {machine.PinStateProbe}");
+			}));
 		}
 	}
 }
