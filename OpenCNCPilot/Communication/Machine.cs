@@ -13,7 +13,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Input;
-
+using System.Text;			// Behebt Fehler CS0246 (StringBuilder) und CS0103 (Encoding)
 
 namespace OpenCNCPilot.Communication
 {
@@ -215,6 +215,7 @@ namespace OpenCNCPilot.Communication
 		public bool SyncBuffer { get; set; }
 
 		private Stream Connection;
+		private SerialPort serialPort;
 		private Thread WorkerThread;
 
 		//ethernet client
@@ -244,262 +245,300 @@ namespace OpenCNCPilot.Communication
 		Queue ToSendPriority = Queue.Synchronized(new Queue()); //contains characters (for soft reset, feed hold etc)
 		Queue ToSendMacro = Queue.Synchronized(new Queue());
 
+		private StringBuilder lineBuffer = new StringBuilder();
+		private bool SendMacroStatusReceived = false;
+
 		private void Work()
 		{
+			if (Connection == null) return;
+
+			// Initialisierung der Variablen
+			int ControllerBufferSize = Properties.Settings.Default.ControllerBufferSize;
+			int StatusPollInterval = Properties.Settings.Default.StatusPollInterval;
+			BufferState = 0;
+
+			DateTime LastStatusPoll = DateTime.Now;
+			DateTime StartTime = DateTime.Now;
+			DateTime LastFilePosUpdate = DateTime.Now;
+			bool filePosChanged = false;
+
+			StreamWriter writer = null;
+			byte[] readBuffer = new byte[4096];
+
 			try
 			{
-				StreamReader reader = new StreamReader(Connection);
-				StreamWriter writer = new StreamWriter(Connection);
+				writer = new StreamWriter(Connection);
 
-				int StatusPollInterval = Properties.Settings.Default.StatusPollInterval;
-
-				int ControllerBufferSize = Properties.Settings.Default.ControllerBufferSize;
-				BufferState = 0;
-
-				TimeSpan WaitTime = TimeSpan.FromMilliseconds(0.5);
-				DateTime LastStatusPoll = DateTime.Now + TimeSpan.FromSeconds(0.5);
-				DateTime StartTime = DateTime.Now;
-
-				DateTime LastFilePosUpdate = DateTime.Now;
-				bool filePosChanged = false;
-
-				bool SendMacroStatusReceived = false;
-
-				writer.Write("\n$G\n");
-				writer.Write("\n$#\n");
+				// Initial-Befehle senden
+				writer.Write("\n$G\n$#\n");
 				writer.Flush();
 
-				while (true)
+				while (Connected && Connection != null)
 				{
-					Task<string> lineTask = reader.ReadLineAsync();
-
-					while (!lineTask.IsCompleted)
+					// --- 1. PRIORITY SENDEN (Echtzeit-Fix für Overrides) ---
+					while (ToSendPriority.Count > 0)
 					{
-						if (!Connected)
+						try
 						{
-							return;
-						}
+							// Da die Queue 'Synchronized' ist und 'objects' enthält:
+							object obj = ToSendPriority.Dequeue();
 
-						while (ToSendPriority.Count > 0)
-						{
-							writer.Write((char)ToSendPriority.Dequeue());
-							writer.Flush();
-						}
-						if (Mode == OperatingMode.SendFile)
-						{
-							if (File.Count > FilePosition && (File[FilePosition].Length + 1) < (ControllerBufferSize - BufferState))
+							if (obj != null)
 							{
-								string send_line = File[FilePosition].Replace(" ", ""); // don't send whitespace to machine
+								// Sicherer Weg: Erst zu char, dann zu byte
+								char c = (char)obj;
+								byte b = (byte)c;
 
-								writer.Write(send_line);
-								writer.Write('\n');
-								writer.Flush();
-
-								RecordLog("> " + send_line);
-
-								RaiseEvent(UpdateStatus, send_line);
-								RaiseEvent(LineSent, send_line);
-
-								BufferState += send_line.Length + 1;
-
-								Sent.Enqueue(send_line);
-
-								if (PauseLines[FilePosition] && Properties.Settings.Default.PauseFileOnHold)
+								if (serialPort != null && serialPort.IsOpen)
 								{
-									Mode = OperatingMode.Manual;
+									// Wir schreiben das Byte direkt, ohne StreamWriter-Umweg
+									serialPort.Write(new byte[] { b }, 0, 1);
 								}
+							}
+						}
+						catch (Exception ex)
+						{
+							System.Diagnostics.Debug.WriteLine("Override-Fehler: " + ex.Message);
+						}
+					}
 
-								if (++FilePosition >= File.Count)
+					// --- 2. BYTES LESEN (Turbo-Modus ohne Blockierung) ---
+					try
+					{
+						// Wir fragen direkt das SerialPort-Objekt. 
+						// Das ist tausendmal schneller als der Umweg über den Stream-Timeout.
+						if (serialPort != null && serialPort.IsOpen && serialPort.BytesToRead > 0)
+						{
+							// Wir lesen nur so viel, wie wirklich im Puffer liegt
+							int bytesRead = Connection.Read(readBuffer, 0, readBuffer.Length);
+
+							if (bytesRead > 0)
+							{
+								string chunk = Encoding.ASCII.GetString(readBuffer, 0, bytesRead);
+								lineBuffer.Append(chunk);
+
+								string content = lineBuffer.ToString();
+								while (content.Contains("\n") || content.Contains(">"))
 								{
-									Mode = OperatingMode.Manual;
+									int nlIndex = content.IndexOf('\n');
+									int gtIndex = content.IndexOf('>');
+									int breakIndex = (nlIndex != -1 && (gtIndex == -1 || nlIndex < gtIndex)) ? nlIndex : gtIndex;
+
+									string readyLine = content.Substring(0, breakIndex + 1).Trim();
+									content = content.Substring(breakIndex + 1);
+
+									lineBuffer.Clear();
+									lineBuffer.Append(content);
+
+									if (!string.IsNullOrEmpty(readyLine))
+										ProcessReceivedLine(readyLine, StartTime);
 								}
-
-								filePosChanged = true;
 							}
 						}
-						else if (Mode == OperatingMode.SendMacro)
-						{
-							switch (Status)
-							{
-								case "Idle":
-									if (BufferState == 0 && SendMacroStatusReceived)
-									{
-										SendMacroStatusReceived = false;
-
-										string send_line = (string)ToSendMacro.Dequeue();
-
-										send_line = Calculator.Evaluate(send_line, out bool success);
-
-										if (!success)
-										{
-											ReportError("Error while evaluating macro!");
-											ReportError(send_line);
-
-											ToSendMacro.Clear();
-										}
-										else
-										{
-											send_line = send_line.Replace(" ", "");
-
-											writer.Write(send_line);
-											writer.Write('\n');
-											writer.Flush();
-
-											RecordLog("> " + send_line);
-
-											RaiseEvent(UpdateStatus, send_line);
-											RaiseEvent(LineSent, send_line);
-
-											BufferState += send_line.Length + 1;
-
-											Sent.Enqueue(send_line);
-										}
-									}
-									break;
-								case "Run":
-								case "Hold":
-									break;
-								default:    // grbl is in some kind of alarm state
-									ToSendMacro.Clear();
-									break;
-							}
-
-							if (ToSendMacro.Count == 0)
-								Mode = OperatingMode.Manual;
-						}
-						else if (ToSend.Count > 0 && (((string)ToSend.Peek()).Length + 1) < (ControllerBufferSize - BufferState))
-						{
-							string send_line = ((string)ToSend.Dequeue()).Replace(" ", "");
-
-							writer.Write(send_line);
-							writer.Write('\n');
-							writer.Flush();
-
-							RecordLog("> " + send_line);
-
-							RaiseEvent(UpdateStatus, send_line);
-							RaiseEvent(LineSent, send_line);
-
-							BufferState += send_line.Length + 1;
-
-							Sent.Enqueue(send_line);
-						}
-
-
-						DateTime Now = DateTime.Now;
-
-						if ((Now - LastStatusPoll).TotalMilliseconds > StatusPollInterval)
-						{
-							writer.Write('?');
-							writer.Flush();
-							LastStatusPoll = Now;
-						}
-
-						//only update file pos every X ms
-						if (filePosChanged && (Now - LastFilePosUpdate).TotalMilliseconds > 500)
-						{
-							RaiseEvent(FilePositionChanged);
-							LastFilePosUpdate = Now;
-							filePosChanged = false;
-						}
-
-						Thread.Sleep(WaitTime);
 					}
-
-					string line = lineTask.Result;
-
-					RecordLog("< " + line);
-
-					if (line == "ok")
+					catch (Exception ex)
 					{
-						RaiseEvent(LineReceived, line); // <--- Signal für den Joystick, deHarry, 2026-02-06
-
-						if (Sent.Count != 0)
-						{
-							BufferState -= ((string)Sent.Dequeue()).Length + 1;
-						}
-						else
-						{
-							Console.WriteLine("Received OK without anything in the Sent Buffer");
-							BufferState = 0;
-						}
+						System.Diagnostics.Debug.WriteLine("CH340 Lese-Glitch: " + ex.Message);
 					}
-					else
+
+					// --- 3. NORMALES SENDEN (FILE, MACRO, POLL) ---
+					HandleSending(writer, ControllerBufferSize, ref filePosChanged);
+
+					// --- 4. STATUS POLL '?' ---
+					DateTime Now = DateTime.Now;
+					if ((Now - LastStatusPoll).TotalMilliseconds > StatusPollInterval)
 					{
-						if (line.StartsWith("error:"))
-						{
-							if (Sent.Count != 0)
-							{
-								string errorline = (string)Sent.Dequeue();
-
-								RaiseEvent(ReportError, $"{line}: {errorline}");
-
-								BufferState -= errorline.Length + 1;
-							}
-							else
-							{
-								if ((DateTime.Now - StartTime).TotalMilliseconds > 200)
-									RaiseEvent(ReportError, $"Received <{line}> without anything in the Sent Buffer");
-
-								BufferState = 0;
-							}
-
-							Mode = OperatingMode.Manual;
-						}
-						else if (line.StartsWith("<"))
-						{
-							RaiseEvent(ParseStatus, line);
-							SendMacroStatusReceived = true;
-						}
-						else if (line.StartsWith("[PRB:"))
-						{
-							RaiseEvent(ParseProbe, line);
-							RaiseEvent(LineReceived, line);
-						}
-						else if (line.StartsWith("["))
-						{
-							RaiseEvent(UpdateStatus, line);
-							RaiseEvent(LineReceived, line);
-						}
-						else if (line.StartsWith("ALARM"))
-						{
-							RaiseEvent(ReportError, line);
-							Mode = OperatingMode.Manual;
-							ToSend.Clear();
-							ToSendMacro.Clear();
-						}
-						else if (line.StartsWith("grbl"))
-						{
-							RaiseEvent(LineReceived, line);
-							RaiseEvent(ParseStartup, line);
-						}
-						else if (line.Length > 0)
-							RaiseEvent(LineReceived, line);
+						Connection.WriteByte((byte)'?');
+						LastStatusPoll = Now;
 					}
+
+					// --- 5. GUI UPDATE (FILE POS) ---
+					if (filePosChanged && (Now - LastFilePosUpdate).TotalMilliseconds > 500)
+					{
+						RaiseEvent(FilePositionChanged);
+						LastFilePosUpdate = Now;
+						filePosChanged = false;
+					}
+
+					Thread.Sleep(1); // CPU entlasten
 				}
 			}
 			catch (Exception ex)
 			{
-				RaiseEvent(ReportError, $"Fatal Error in Work Loop: {ex.Message}");
+				RaiseEvent(ReportError, $"Fataler Fehler in Work-Schleife: {ex.Message}");
 				RaiseEvent(() => Disconnect());
 			}
 		}
 
+		// HILFSMETHODE: Verarbeitet eine fertig zusammengesetzte Zeile (Parser)
+		private void ProcessReceivedLine(string line, DateTime StartTime)
+		{
+			RecordLog("< " + line);
+
+			if (line == "ok")
+			{
+				RaiseEvent(LineReceived, line);
+				if (Sent.Count != 0)
+					BufferState -= ((string)Sent.Dequeue()).Length + 1;
+				else
+					BufferState = 0;
+			}
+			else if (line.StartsWith("error:"))
+			{
+				if (Sent.Count != 0)
+				{
+					string errorline = (string)Sent.Dequeue();
+					RaiseEvent(ReportError, $"{line}: {errorline}");
+					BufferState -= errorline.Length + 1;
+				}
+				else
+				{
+					if ((DateTime.Now - StartTime).TotalMilliseconds > 200)
+						RaiseEvent(ReportError, $"Received <{line}> without anything in the Sent Buffer");
+					BufferState = 0;
+				}
+				Mode = OperatingMode.Manual;
+			}
+			else if (line.StartsWith("<"))
+			{
+				RaiseEvent(ParseStatus, line);
+				SendMacroStatusReceived = true;
+			}
+			else if (line.StartsWith("[PRB:"))
+			{
+				RaiseEvent(ParseProbe, line);
+				RaiseEvent(LineReceived, line);
+			}
+			else if (line.StartsWith("["))
+			{
+				RaiseEvent(UpdateStatus, line);
+				RaiseEvent(LineReceived, line);
+			}
+			else if (line.StartsWith("ALARM"))
+			{
+				RaiseEvent(ReportError, line);
+				Mode = OperatingMode.Manual;
+				ToSend.Clear();
+				ToSendMacro.Clear();
+			}
+			else if (line.StartsWith("grbl"))
+			{
+				RaiseEvent(LineReceived, line);
+				RaiseEvent(ParseStartup, line);
+			}
+			else if (line.Length > 0)
+			{
+				RaiseEvent(LineReceived, line);
+			}
+		}
+
+		// HILFSMETHODE: Übernimmt das Senden von G-Code
+		private void HandleSending(StreamWriter writer, int ControllerBufferSize, ref bool filePosChanged)
+		{
+			if (Mode == OperatingMode.SendFile)
+			{
+				if (File.Count > FilePosition && (File[FilePosition].Length + 1) < (ControllerBufferSize - BufferState))
+				{
+					string send_line = File[FilePosition].Replace(" ", "");
+					writer.Write(send_line + "\n");
+					writer.Flush();
+
+					RecordLog("> " + send_line);
+					RaiseEvent(UpdateStatus, send_line);
+					RaiseEvent(LineSent, send_line);
+					BufferState += send_line.Length + 1;
+					Sent.Enqueue(send_line);
+
+					if (PauseLines[FilePosition] && Properties.Settings.Default.PauseFileOnHold)
+						Mode = OperatingMode.Manual;
+
+					if (++FilePosition >= File.Count)
+						Mode = OperatingMode.Manual;
+
+					filePosChanged = true;
+				}
+			}
+			else if (Mode == OperatingMode.SendMacro)
+			{
+				if (Status == "Idle" && BufferState == 0 && SendMacroStatusReceived)
+				{
+					SendMacroStatusReceived = false;
+					string send_line = (string)ToSendMacro.Dequeue();
+					send_line = Calculator.Evaluate(send_line, out bool success);
+
+					if (success)
+					{
+						send_line = send_line.Replace(" ", "");
+						writer.Write(send_line + "\n");
+						writer.Flush();
+						RecordLog("> " + send_line);
+						RaiseEvent(UpdateStatus, send_line);
+						RaiseEvent(LineSent, send_line);
+						BufferState += send_line.Length + 1;
+						Sent.Enqueue(send_line);
+					}
+					if (ToSendMacro.Count == 0) Mode = OperatingMode.Manual;
+				}
+			}
+			else if (ToSend.Count > 0 && (((string)ToSend.Peek()).Length + 1) < (ControllerBufferSize - BufferState))
+			{
+				string send_line = ((string)ToSend.Dequeue()).Replace(" ", "");
+				writer.Write(send_line + "\n");
+				writer.Flush();
+				RecordLog("> " + send_line);
+				RaiseEvent(UpdateStatus, send_line);
+				RaiseEvent(LineSent, send_line);
+				BufferState += send_line.Length + 1;
+				Sent.Enqueue(send_line);
+			}
+		}
 		public void Connect()
 		{
 			if (Connected)
 				throw new Exception("Can't Connect: Already Connected");
 
-
 			switch (Properties.Settings.Default.ConnectionType)
 			{
 				case ConnectionType.Serial:
-					SerialPort port = new SerialPort(Properties.Settings.Default.SerialPortName, Properties.Settings.Default.SerialPortBaud);
-					port.DtrEnable = Properties.Settings.Default.SerialPortDTR;
-					port.Open();
-					Connection = port.BaseStream;
-					Connected = true;
+					string portName = Properties.Settings.Default.SerialPortName;
+					int baudRate = Properties.Settings.Default.SerialPortBaud;
+
+					if (string.IsNullOrWhiteSpace(portName))
+						throw new Exception("Kein COM-Port ausgewählt.");
+
+					serialPort = new SerialPort(portName, baudRate);
+
+					// Grundkonfiguration (CH340-freundlich)
+					serialPort.DtrEnable = true; // Direkt auf true, wie beim Joystick
+					serialPort.RtsEnable = true;
+					serialPort.Handshake = Handshake.None;
+
+					try
+					{
+						serialPort.Open();
+
+						// Dem Arduino Zeit zum Booten geben (Reset durch DTR)
+						System.Threading.Thread.Sleep(100);
+
+						// Puffer einmalig leeren, damit keine alten Reste stören
+						serialPort.DiscardInBuffer();
+						serialPort.DiscardOutBuffer();
+
+						// Den Soft-Reset schicken wir trotzdem – sicher ist sicher
+						serialPort.Write("\x18");
+
+						Connection = serialPort.BaseStream;
+						Connected = true;
+
+						Console.WriteLine($"GRBL-Port {portName} erfolgreich geöffnet.");
+					}
+					catch (Exception ex)
+					{
+						if (serialPort != null && serialPort.IsOpen) serialPort.Close();
+						throw new Exception($"Fehler beim Öffnen von {portName}: {ex.Message}");
+					}
 					break;
+
 				case ConnectionType.Ethernet:
 					try
 					{
@@ -953,6 +992,7 @@ namespace OpenCNCPilot.Communication
 		}
 
 		private static Regex StatusEx = new Regex(@"(?<=[<|])(\w+):?([^|>]*)?(?=[|>])", RegexOptions.Compiled);
+
 		/// <summary>
 		/// Parses a recevied status report (answer to '?')
 		/// </summary>

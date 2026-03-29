@@ -42,6 +42,7 @@ using System;
 using System.Globalization;
 using System.IO.Ports;
 using System.Timers;
+using System.Threading;
 
 
 namespace OpenCNCPilot.Communication
@@ -51,7 +52,7 @@ namespace OpenCNCPilot.Communication
         private Machine _machine;
         private SerialPort _serialPort;
         private OpenCNCPilot.MainWindow _parent;
-        private Timer _jogTimer;
+        private System.Timers.Timer _jogTimer;
 
         private double _joyX, _joyY, _joyZ;
         private bool _isJogging = false;
@@ -61,36 +62,63 @@ namespace OpenCNCPilot.Communication
         public JoystickService(string portName, int baudRate, Machine machine, OpenCNCPilot.MainWindow parent)
         {
             _machine = machine;
-            _parent = parent; // Zuweisung
-
-            _serialPort = new SerialPort(portName, baudRate);
-            _serialPort.DataReceived += OnDataReceived;
-            //_machine.Connection.LineReceived += Connection_LineReceived;
-
-            _jogTimer = new Timer(TIMER_INTERVAL_MS);
+            _parent = parent;
+            _jogTimer = new System.Timers.Timer(TIMER_INTERVAL_MS);
             _jogTimer.Elapsed += OnJogTimerTick;
             _jogTimer.AutoReset = true;
+
+            if (!string.IsNullOrWhiteSpace(portName) && !portName.Equals("None", StringComparison.OrdinalIgnoreCase))
+            {
+                try
+                {
+                    // Das Objekt IMMER erstellen
+                    _serialPort = new SerialPort(portName, baudRate);
+                    _serialPort.DtrEnable = true; // Auf true, damit der Arduino startet
+                    _serialPort.RtsEnable = true;
+
+                    Thread.Sleep(50);
+                    if (_serialPort.IsOpen)
+                        _serialPort.DiscardInBuffer();
+                }
+                catch (Exception ex)
+                {
+                    // WICHTIG: NICHT auf null setzen! Nur Fehler loggen.
+                    Console.WriteLine($"Joystick-Port initialer Fehler: {ex.Message}");
+                }
+            }
         }
 
         public void Open()
         {
+            if (_serialPort == null || _serialPort.IsOpen) return;
+
             try
             {
-                if (!_serialPort.IsOpen)
-                    _serialPort.Open();
+                _serialPort.Open();
+                Thread.Sleep(100); // Dem CH340 Zeit geben, sich zu fangen
+
+                // Start des Siphons
+                Thread t = new Thread(JoystickWorker);
+                t.IsBackground = true;
+                t.Start();
+
+                Console.WriteLine("Joystick-Siphon gestartet auf " + _serialPort.PortName);
             }
             catch (Exception ex)
             {
-                // Nutzt das OCP-interne Logging, falls verfügbar
-                Console.WriteLine($"Joystick Error: {ex.Message}");
+                Console.WriteLine("Joystick Open Error: " + ex.Message);
             }
         }
 
         public void Close()
         {
-            _jogTimer.Stop();
-            if (_serialPort.IsOpen)
-                _serialPort.Close();
+            _jogTimer?.Stop();
+
+            // Null-Check und Open-Check kombiniert
+            if (_serialPort != null && _serialPort.IsOpen)
+            {
+                try { _serialPort.Close(); } catch { }
+            }
 
             _joyX = _joyY = _joyZ = 0;
             _isJogging = false;
@@ -222,8 +250,7 @@ namespace OpenCNCPilot.Communication
                     System.Diagnostics.Debug.WriteLine("Fehler im Timer-Tick: " + ex.Message);
                 }
             }));
-        }
-        
+        }        
 
         private async void StopJogging()
         {
@@ -250,6 +277,41 @@ namespace OpenCNCPilot.Communication
             //_machine.SendLine("G4 P0");
 
             _isJogging = false;
+        }
+
+        private void JoystickWorker()
+        {
+            string lineBuffer = "";
+            while (_serialPort != null && _serialPort.IsOpen)
+            {
+                try
+                {
+                    if (_serialPort.BytesToRead > 0)
+                    {
+                        int b = _serialPort.ReadByte();
+                        if (b == -1) continue;
+
+                        char c = (char)b;
+                        if (c == '\n' || c == '\r')
+                        {
+                            if (!string.IsNullOrWhiteSpace(lineBuffer))
+                            {
+                                ParseInput(lineBuffer.Trim());
+                                lineBuffer = "";
+                            }
+                        }
+                        else
+                        {
+                            lineBuffer += c;
+                        }
+                    }
+                    else
+                    {
+                        Thread.Sleep(1); // CPU schonen
+                    }
+                }
+                catch { break; }
+            }
         }
     }
 }

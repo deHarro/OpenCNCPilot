@@ -70,11 +70,35 @@ namespace OpenCNCPilot
 			viewport.Children.Add(_measureMarker);
 
 			// global variable for JoystickService, <deHarry, 2026-02-06>
-			_joystick = new OpenCNCPilot.Communication.JoystickService(
-				Properties.Settings.Default.JoystickPort,
-				Properties.Settings.Default.JoystickBaudrate,
-				machine, this
-			);
+			// Hier wird der Port für den Joystick instantiiert
+			// Prüfung auf: nicht null, nicht leer, kein reines Leerzeichen UND nicht "None"
+			if (!string.IsNullOrWhiteSpace(Properties.Settings.Default.JoystickPort) && !Properties.Settings.Default.JoystickPort.Equals("None", StringComparison.OrdinalIgnoreCase))
+			{
+				try
+				{
+					_joystick = new OpenCNCPilot.Communication.JoystickService(
+						Properties.Settings.Default.JoystickPort,
+						Properties.Settings.Default.JoystickBaudrate,
+						machine, this
+					);
+
+					_joystick.Open();
+
+				}
+				catch (Exception ex)
+				{
+					// WICHTIG: Setze das Objekt auf null, damit die Work-Loop später Bescheid weiß
+					_joystick = null;
+					// Optional: Ein Log-Eintrag, damit der User weiß, warum der Joystick nicht geht
+					Console.WriteLine($"Joystick-Fehler an {Properties.Settings.Default.JoystickPort}: {ex.Message}");
+				}
+			}
+			else
+			{
+				// Explizit null setzen, wenn kein Port gewählt wurde
+				_joystick = null;
+			}
+
 
 			Properties.Settings.Default.PropertyChanged += (s, e) => {
 				if (e.PropertyName == "MarkerSize")
@@ -89,13 +113,26 @@ namespace OpenCNCPilot
 			// automatically  open/close joystick port, <deHarry, 2026-02-06>
 			machine.ConnectionStateChanged += () =>
 			{
-				if (machine.Connected)
+				if (!string.IsNullOrWhiteSpace(Properties.Settings.Default.JoystickPort) && !Properties.Settings.Default.JoystickPort.Equals("None", StringComparison.OrdinalIgnoreCase))
 				{
-					_joystick.Open();
-				}
-				else
-				{
-					_joystick.Close();
+					try
+					{
+						if (machine.Connected)
+						{
+							_joystick.Open();
+						}
+						else
+						{
+							if (_joystick != null) _joystick.Close();
+						}
+					}
+					catch (Exception ex)
+					{
+						// WICHTIG: Setze das Objekt auf null, damit die Work-Loop später Bescheid weiß
+						_joystick = null;
+						// Optional: Ein Log-Eintrag, damit der User weiß, warum der Joystick nicht geht
+						Console.WriteLine($"Joystick-Fehler an {Properties.Settings.Default.JoystickPort}: {ex.Message}");
+					}
 				}
 			};
 			// automatically  open/close joystick port, <deHarry, 2026-02-06>
@@ -154,8 +191,6 @@ namespace OpenCNCPilot
 					OpenFileDialogGCode_FileOk(null, null);
 				}
 			}
-
-
 		}
 
 		public Vector3 LastProbePosMachine { get; set; }
@@ -418,14 +453,8 @@ namespace OpenCNCPilot
 					TxtDistance.Text = "Messung abgebrochen";
 				}
 
-				// Optional: Wenn beim ESC-Drücken auch die Koordinaten-Anzeige 
-				// geleert werden soll, nimm diese Zeile dazu:
+				// beim ESC wird auch die Koordinaten-Anzeige geleert
 				if (TxtPickedCoords != null) TxtPickedCoords.Text = "X: 0.000 Y: 0.000";
-
-				// 3. Modus-Buttons optisch zurücksetzen (falls gewünscht)
-				// Wenn ESC auch den Modus komplett beenden soll:
-				// BtnMeasure.IsChecked = false;
-				// BtnMeasure.ClearValue(Control.BackgroundProperty);
 
 				// Wir markieren das Event als erledigt
 				e.Handled = true;
@@ -458,8 +487,7 @@ namespace OpenCNCPilot
 
 		private void ExpanderMeasure_Expanded(object sender, RoutedEventArgs e)
 		{
-			// Punkt 3: Automatisch Lay-Flat ausführen
-			// Wir rufen die vorhandene OCP-Funktion auf, die die Kamera flach stellt
+			// Automatisch Lay-Flat ausführen. Wir rufen die vorhandene OCP-Funktion auf, die die Kamera flach stellt
 			if (viewport != null)
 			{
 				ButtonLayFlatViewport_Click(null, null);
@@ -619,7 +647,6 @@ namespace OpenCNCPilot
 			string cmdXY = string.Format(culture, "G0 X{0:F3} Y{1:F3}", _lastX, _lastY);
 
 			// 2. Den kombinierten String für die Weiterverwendung erstellen
-			// Wir nutzen hier Environment.NewLine, damit es im Clipboard und in der Box sauber getrennt ist
 			string gcode = cmdZ + Environment.NewLine + cmdXY;
 
 			if (TextBoxManual != null)
@@ -630,7 +657,7 @@ namespace OpenCNCPilot
 			}
 			else
 			{
-				// Falls die Box nicht da ist: Ab ins Clipboard (dein else-Zweig)
+				// Falls die Box nicht da ist: Ab ins Clipboard
 				System.Windows.Clipboard.SetText(gcode);
 			}
 		}
@@ -676,7 +703,7 @@ namespace OpenCNCPilot
 						container?.BringIntoView();
 					}));
 
-					// 3. Optional: Den Fokus setzen, damit die Zeile farblich hervorgehoben wird
+					// Den Fokus setzen, damit die Zeile farblich hervorgehoben wird
 					ListViewFile.Focus();
 				}
 			}
@@ -699,7 +726,7 @@ namespace OpenCNCPilot
 			Point3D bestHitPoint = new Point3D();
 			bool hitFound = false; // <-- Hier definiert
 
-			// 1. Dein bewährter Magnet-Loop
+			// 1. bewährter Magnet-Loop
 			foreach (var entry in _lineMapping)
 			{
 				var visual = entry.Key as HelixToolkit.Wpf.LinesVisual3D;
@@ -724,7 +751,7 @@ namespace OpenCNCPilot
 						bestDist = effectiveDist;
 						bestHitPoint = (p1.Z > p2.Z) ? p1 : p2;
 						bestLineNumber = indices[i / 2];
-						hitFound = true; // <-- Jetzt wissen wir: Wir haben G-Code getroffen
+						hitFound = true;					// <-- Jetzt wissen wir: Wir haben G-Code getroffen
 					}
 				}
 			}
@@ -737,7 +764,7 @@ namespace OpenCNCPilot
 			}
 			else
 			{
-				// Manueller Ersatz für FindRay, falls HelixToolkit zickt:
+				// Manueller Ersatz für FindRay, weil HelixToolkit zickt:
 				var viewport3D = viewport.Viewport;
 				var hitResult = VisualTreeHelper.HitTest(viewport3D, mousePos) as RayMeshGeometry3DHitTestResult;
 				if (hitResult != null)
@@ -886,7 +913,6 @@ namespace OpenCNCPilot
 			_lastY = finalY;
 
 			// 3. Die Nadel (der rote Ball) setzen
-
 			if (_clickMarker == null)			// Falls sie durch Reset gelöscht wurde: Neu erschaffen
 			{
 				_clickMarker = new HelixToolkit.Wpf.SphereVisual3D { Fill = System.Windows.Media.Brushes.Red };
@@ -909,10 +935,10 @@ namespace OpenCNCPilot
 			if (diagonal <= 0) return 1.0;
 
 			// Die Logik: Der Marker soll ca. 1-2% der Modellgröße entsprechen,
-			// aber niemals kleiner als 0.3mm und niemals größer als 5mm sein.
+			// aber niemals kleiner als 0.5mm und niemals größer als 5mm sein.
 			double adaptiveSize = diagonal * 0.015;
 
-			return Math.Max(0.3, Math.Min(adaptiveSize, 5.0));
+			return Math.Max(0.5, Math.Min(adaptiveSize, 5.0));
 		}
 
 		//----- ButtonLayFlatViewport ---------------------------------------------------
@@ -1226,7 +1252,7 @@ namespace OpenCNCPilot
 					}
 				}
 
-				// 2. Bounding Box berechnen (EXAKT DEIN CODE)
+				// 2. Bounding Box berechnen
 				var totalBounds = System.Windows.Media.Media3D.Rect3D.Empty;
 
 				foreach (var child in viewport.Children)
@@ -1293,7 +1319,7 @@ namespace OpenCNCPilot
 				}
 				// ----------------------------------------
 
-				// 3. Gezielter Zoom (EXAKT DEIN CODE)
+				// 3. Gezielter Zoom 
 				if (!totalBounds.IsEmpty)
 				{
 					double margin = 0.15;
@@ -1339,7 +1365,7 @@ namespace OpenCNCPilot
 			// 5. Memory-Leak-Bremse für große PCB-Dateien
 			if (finalLines.Length > 20000)
 			{
-				GC.Collect(1);
+				GC.Collect(1);			// Garbage colletion ausführen
 			}
 		}
 
