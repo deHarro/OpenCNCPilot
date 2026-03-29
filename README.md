@@ -34,7 +34,8 @@ Hovering the mouse over the blue "Mod.: deHarro" in the About box displays the v
 Clicking the blue text opens my OCP repository on Github.
 
 To use this pimped version of OCP, just copy the "OpenCNCPilot.exe" from the ZIP (see [Releases section](https://github.com/deHarro/OpenCNCPilot/releases/latest) for the latest version) over the existing EXE from Martin (if you used OCP before).
-If you are new to OCP, extract the ZIP to a folder of your choice (e.g. name it OpenCNCPilot) and start OCP by double clicking the EXE.
+
+If you are new to OCP, extract the ZIP to a folder of your choice (e.g. name it OpenCNCPilot) and start OCP by double clicking the EXE. Also see Martin's advises below.
 
 The new features are described on my [homepage](https://harald-sattler.de/html/grbl-jogging.htm). 
 Use the translation feature accessible at the bottom of every page.
