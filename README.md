@@ -33,7 +33,7 @@ I signed my modifications via "Mod: Vx.y, deHarro" in the About Box, leaving the
 Hovering the mouse over the blue "Mod.: deHarro" in the About box displays the versions I implemented till now.
 Clicking the blue text opens my OCP repository on Github.
 
-To use this pimped version of OCP, just copy the "OpenCNCPilot.exe" from the ZIP over the existing EXE from Martin (if you used OCP before).
+To use this pimped version of OCP, just copy the "OpenCNCPilot.exe" from the ZIP (see [Releases section](https://github.com/deHarro/OpenCNCPilot/releases/latest) for the latest version) over the existing EXE from Martin (if you used OCP before).
 If you are new to OCP, extract the ZIP to a folder of your choice (e.g. name it OpenCNCPilot) and start OCP by double clicking the EXE.
 
 The new features are described on my [homepage](https://harald-sattler.de/html/grbl-jogging.htm). 
