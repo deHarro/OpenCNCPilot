@@ -53,9 +53,6 @@
 
                     <TextBox Margin="10,113,0,0" Text="{util:SettingBinding JoystickBaudrate}"/>
                     <Label Content="Joystick BaudRate" HorizontalAlignment="Left" Margin="135,112,0,0" VerticalAlignment="Top"/>
-
-                    <TextBlock Text="Hold Shift/Alt for silent joystick mode" HorizontalAlignment="Left" Margin="10,140,0,0" VerticalAlignment="Top" FontSize="10" Foreground="Gray" FontStyle="Italic"/>
-
                 </Grid>
 
                 <Grid HorizontalAlignment="Left" Height="58" Margin="0,34,0,0" VerticalAlignment="Top" Width="374">
