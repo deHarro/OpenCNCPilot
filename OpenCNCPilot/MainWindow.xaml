@@ -401,7 +401,7 @@
                                         <Hyperlink RequestNavigate="Hyperlink_RequestNavigate" NavigateUri="https://github.com/deHarro/OpenCNCPilot" TextDecorations="None">Mod: deHarro</Hyperlink>
                                     </TextBlock>
 
-                                    <TextBlock Text=" - v1.11, 2026-03-24" 
+                                    <TextBlock Text=" - v1.12, 2026-03-29" 
                                        Foreground="Gray" 
                                        FontSize="10" />
                                 </StackPanel>
@@ -417,19 +417,12 @@
                                                 <TextBlock Text="v1.4: Sort Layerlist"/>
                                                 <TextBlock Text="v1.5: Reload Files/Layers"/>
                                                 <TextBlock Text="v1.6: Distance in Viewport"/>
-                                                <TextBlock> 
-                                                    v1.7:
-                                                    <LineBreak />
-                                                    Jump to G-Code line, added marker,
-                                                    <LineBreak />
-                                                    Distances corrected, added markers,
-                                                    <LineBreak />
-                                                    Adjustable marker size 
-                                                </TextBlock>
+                                                <TextBlock Text="v1.7: Jump to G-Code line, Distances corrected, added markers"/>
                                                 <TextBlock Text="v1.8: Fix Rotate Origin, fix Lay-Flat"/>
                                                 <TextBlock Text="v1.9: Save Viewport Orientation in Settings and set Design accordingly"/>
                                                 <TextBlock Text="v1.10: Fix Rotation logic and synchronization timing"/>
                                                 <TextBlock Text="v1.11: Fix display of Limit and Probe notifications"/>
+                                                <TextBlock Text="v1.12: Fix 'new CH340 driver' problem"/>
                                             </StackPanel>
                                         </TextBlock>
                                     </ToolTip>
