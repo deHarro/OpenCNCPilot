@@ -24,6 +24,7 @@ Background: This feature is helpful when you have to adjust the machine to the d
 - Adapted marker size to layout size
 - Changed Tooltip for RO (rotate origin) button
 - Nailed the viewport orientation to the saved settings for RO ("rotate origin" in Debug box) and RotateCW ("rotate clockwise" in Edit box)
+- Replaced the original communication implementation to/from GRBL from event driven readline() to polling byte-by-byte to get rid of the problems, established by installing the actual CH340 driver over Microsoft update mechanism.
 
 **Some of the new features are under construction still.<br>
 There may be errors and flaws, use at your own risk in productive environment!**
@@ -35,7 +36,7 @@ Clicking the blue text opens my OCP repository on Github.
 To use this pimped version of OCP, just copy the "OpenCNCPilot.exe" from the ZIP over the existing EXE from Martin (if you used OCP before).
 If you are new to OCP, extract the ZIP to a folder of your choice (e.g. name it OpenCNCPilot) and start OCP by double clicking the EXE.
 
-I will describe the new features in the near future on my [homepage](https://www.harald-sattler.de/). 
+The new features are described on my [homepage](https://harald-sattler.de/html/grbl-jogging.htm). 
 Use the translation feature accessible at the bottom of every page.
 
 --------------------------------------
