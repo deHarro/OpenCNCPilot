@@ -3,8 +3,8 @@
 --------------------------------------
 In this Repo I added some gadgets and goodies to the original OpenCNCPilot (OCP) of Martin Pittermann.
 
-- Show a View Cube (switched on/off in the Debug Tab)
-- Show Camera Info (switched on/off in the Debug Tab)
+- Show a View Cube (switched on/off in the Debug Tab) - more or less only exercise in C#/WPF
+- Show Camera Info (switched on/off in the Debug Tab) - more or less only exercise in C#/WPF
 - Joystick jogging. See [here](https://harald-sattler.de/html/grbl-jogging.htm) for additional information on how to use.
 - Superimpose several files, can be viewed in the GUI and may be machined together (provided the same tool is used). The files may be switched on/off via check boxes.
 - Get rid of several GCodes, can be checked on/off via "Settings - GCode".
