@@ -24,7 +24,7 @@ Background: This feature is helpful when you have to adjust the machine to the d
 - Moved the new features from "Debug" to "Inspection & Measurement" (just below "About").
 - Changed Tooltip for RO (rotate origin) button
 - Nailed the viewport orientation to the saved settings for RO ("rotate origin" in Debug box) and RotateCW ("rotate clockwise" in Edit box)
-- Replaced the original communication implementation to/from GRBL from event driven readline() to polling byte-by-byte to get rid of the problems, established by installing the actual CH340 driver over Microsoft update mechanism.
+- Replaced the original communication implementation to/from GRBL from event driven readline() to polling byte-by-byte to get rid of the problems, established by installing the up to date CH340 driver over Microsoft update mechanism (as of mid 2026).
 
 **Some of the new features are under construction still.<br>
 There may be errors and flaws, use at your own risk in productive environment!**
