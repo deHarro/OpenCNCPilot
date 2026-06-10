@@ -12,7 +12,7 @@ namespace OpenCNCPilot.Properties {
     
     
     [global::System.Runtime.CompilerServices.CompilerGeneratedAttribute()]
-    [global::System.CodeDom.Compiler.GeneratedCodeAttribute("Microsoft.VisualStudio.Editors.SettingsDesigner.SettingsSingleFileGenerator", "16.10.0.0")]
+    [global::System.CodeDom.Compiler.GeneratedCodeAttribute("Microsoft.VisualStudio.Editors.SettingsDesigner.SettingsSingleFileGenerator", "18.7.0.0")]
     internal sealed partial class Settings : global::System.Configuration.ApplicationSettingsBase {
         
         private static Settings defaultInstance = ((Settings)(global::System.Configuration.ApplicationSettingsBase.Synchronized(new Settings())));
@@ -872,6 +872,114 @@ namespace OpenCNCPilot.Properties {
             }
             set {
                 this["GCodeRotation"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("False")]
+        public bool DKWExpanderOpen {
+            get {
+                return ((bool)(this["DKWExpanderOpen"]));
+            }
+            set {
+                this["DKWExpanderOpen"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("False")]
+        public bool ShowDKWModule {
+            get {
+                return ((bool)(this["ShowDKWModule"]));
+            }
+            set {
+                this["ShowDKWModule"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("1")]
+        public double DKWProbeDiameter {
+            get {
+                return ((double)(this["DKWProbeDiameter"]));
+            }
+            set {
+                this["DKWProbeDiameter"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("0.9")]
+        public double DKWMillDiameter {
+            get {
+                return ((double)(this["DKWMillDiameter"]));
+            }
+            set {
+                this["DKWMillDiameter"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("True")]
+        public bool ProbeSimulation {
+            get {
+                return ((bool)(this["ProbeSimulation"]));
+            }
+            set {
+                this["ProbeSimulation"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("0.5")]
+        public double DKWWallRemoval {
+            get {
+                return ((double)(this["DKWWallRemoval"]));
+            }
+            set {
+                this["DKWWallRemoval"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("0.2")]
+        public double DKWStepOverH {
+            get {
+                return ((double)(this["DKWStepOverH"]));
+            }
+            set {
+                this["DKWStepOverH"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("0.2")]
+        public double DKWStepDownV {
+            get {
+                return ((double)(this["DKWStepDownV"]));
+            }
+            set {
+                this["DKWStepDownV"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("False")]
+        public bool UseXInputGamePad {
+            get {
+                return ((bool)(this["UseXInputGamePad"]));
+            }
+            set {
+                this["UseXInputGamePad"] = value;
             }
         }
     }

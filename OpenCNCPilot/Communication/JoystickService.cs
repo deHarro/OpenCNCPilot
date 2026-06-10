@@ -43,6 +43,7 @@ using System.Globalization;
 using System.IO.Ports;
 using System.Timers;
 using System.Threading;
+using System.Windows;
 
 
 namespace OpenCNCPilot.Communication
@@ -147,6 +148,15 @@ namespace OpenCNCPilot.Communication
 
         private void ParseInput(string data)
         {
+            // 1. Grund-Check: Wenn keine Daten da sind, gar nicht erst anfangen
+            if (string.IsNullOrWhiteSpace(data))
+                return;
+
+            // 2. Sicherheits-Check VOR dem Dispatcher:
+            // Wenn die App am Beenden ist oder die Maschine bereits weg ist, sofort abbrechen.
+            if (Application.Current == null || _machine == null)
+                return;
+            
             // Wir schieben die komplette Verarbeitung in den UI-Thread
             System.Windows.Application.Current.Dispatcher.BeginInvoke(new Action(() =>
             {

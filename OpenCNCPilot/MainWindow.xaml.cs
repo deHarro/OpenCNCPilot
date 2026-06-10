@@ -15,7 +15,8 @@ using System.Collections.ObjectModel;
 using System.Windows.Input;				// Für MouseButtonEventArgs
 using System.Windows.Media;				// Für VisualTreeHelper / HitTest
 using System.Windows.Media.Media3D;		// Für Point3D und RayMeshGeometry3DHitTestResult
-using HelixToolkit.Wpf;					// Falls du noch Helix-Typen nutzt
+using HelixToolkit.Wpf;                 // Falls du noch Helix-Typen nutzt
+using System.Threading.Tasks;
 
 namespace OpenCNCPilot
 {
@@ -37,7 +38,9 @@ namespace OpenCNCPilot
 
 		private Point3D? _firstMeasurePoint = null; // Speichert den ersten Klick für die Messung
 		private double _lastX, _lastY;              // Für den "Send to Manual"-Button
-		private double diagonal; 
+		private double diagonal;
+
+		DKWHandler dkw = new DKWHandler();
 
 		private HelixToolkit.Wpf.SphereVisual3D _clickMarker;
 		private HelixToolkit.Wpf.SphereVisual3D _measureMarker;
@@ -58,10 +61,13 @@ namespace OpenCNCPilot
 
 		// private variable on class level		<deHarry, 2026-02-16>
 		private OpenCNCPilot.Communication.JoystickService _joystick;
+        // private variable on class level		<deHarry, 2026-06-08>
+        private OpenCNCPilot.Communication.GamePadService _gamepad;
 
-		public MainWindow()
+        public MainWindow()
 		{
 			AppDomain.CurrentDomain.UnhandledException += UnhandledException;
+			System.Threading.Thread.CurrentThread.CurrentCulture = System.Globalization.CultureInfo.InvariantCulture;	// behandelt Punkt/Komma in Dezimalzahlen wie Windows
 			InitializeComponent();
 
 			_clickMarker   = new HelixToolkit.Wpf.SphereVisual3D { Radius = 0.5, Fill = System.Windows.Media.Brushes.Red };
@@ -69,7 +75,10 @@ namespace OpenCNCPilot
 			_measureMarker = new HelixToolkit.Wpf.SphereVisual3D { Radius = 0.5, Fill = System.Windows.Media.Brushes.Blue };
 			viewport.Children.Add(_measureMarker);
 
-			// global variable for JoystickService, <deHarry, 2026-02-06>
+			txtProbeDiam.Text = Properties.Settings.Default.DKWProbeDiameter.ToString("F2");
+			txtMillDiam.Text = Properties.Settings.Default.DKWMillDiameter.ToString("F2");
+
+/*			// global variable for JoystickService, <deHarry, 2026-02-06>
 			// Hier wird der Port für den Joystick instantiiert
 			// Prüfung auf: nicht null, nicht leer, kein reines Leerzeichen UND nicht "None"
 			if (!string.IsNullOrWhiteSpace(Properties.Settings.Default.JoystickPort) && !Properties.Settings.Default.JoystickPort.Equals("None", StringComparison.OrdinalIgnoreCase))
@@ -81,9 +90,7 @@ namespace OpenCNCPilot
 						Properties.Settings.Default.JoystickBaudrate,
 						machine, this
 					);
-
 					_joystick.Open();
-
 				}
 				catch (Exception ex)
 				{
@@ -98,6 +105,47 @@ namespace OpenCNCPilot
 				// Explizit null setzen, wenn kein Port gewählt wurde
 				_joystick = null;
 			}
+*/
+
+			// Weiche für Joystick oder Gamepad beim Programmstart, <deHarry, 2026-06-08>
+			_joystick?.Close();
+			_joystick = null;
+			_gamepad?.Close();
+			_gamepad = null;
+
+			if (Properties.Settings.Default.UseXInputGamePad)
+			{
+				try
+				{
+					_gamepad = new OpenCNCPilot.Communication.GamePadService(machine, this);
+					_gamepad.Open();
+					Console.WriteLine("Gamepad-Modus beim Start aktiviert.");
+				}
+				catch (Exception ex)
+				{
+					_gamepad = null;
+					Console.WriteLine($"Gamepad-Fehler beim Start: {ex.Message}");
+				}
+			}
+			else if (!string.IsNullOrWhiteSpace(Properties.Settings.Default.JoystickPort) && !Properties.Settings.Default.JoystickPort.Equals("None", StringComparison.OrdinalIgnoreCase))
+			{
+				try
+				{
+					_joystick = new OpenCNCPilot.Communication.JoystickService(
+						Properties.Settings.Default.JoystickPort,
+						Properties.Settings.Default.JoystickBaudrate,
+						machine, this
+					);
+					_joystick.Open();
+					Console.WriteLine("Serieller Joystick-Modus beim Start aktiviert.");
+				}
+				catch (Exception ex)
+				{
+					_joystick = null;
+					Console.WriteLine($"Joystick-Fehler an {Properties.Settings.Default.JoystickPort}: {ex.Message}");
+				}
+			}
+
 
 
 			Properties.Settings.Default.PropertyChanged += (s, e) => {
@@ -110,32 +158,72 @@ namespace OpenCNCPilot
 				}
 			};
 
-			// automatically  open/close joystick port, <deHarry, 2026-02-06>
-			machine.ConnectionStateChanged += () =>
-			{
-				if (!string.IsNullOrWhiteSpace(Properties.Settings.Default.JoystickPort) && !Properties.Settings.Default.JoystickPort.Equals("None", StringComparison.OrdinalIgnoreCase))
-				{
-					try
-					{
-						if (machine.Connected)
+			/*			// automatically  open/close joystick port, <deHarry, 2026-02-06>
+						machine.ConnectionStateChanged += () =>
 						{
+							if (!string.IsNullOrWhiteSpace(Properties.Settings.Default.JoystickPort) && !Properties.Settings.Default.JoystickPort.Equals("None", StringComparison.OrdinalIgnoreCase))
+							{
+								try
+								{
+									if (machine.Connected)
+									{
+										_joystick.Open();
+									}
+									else
+									{
+										if (_joystick != null) _joystick.Close();
+									}
+								}
+								catch (Exception ex)
+								{
+									// WICHTIG: Setze das Objekt auf null, damit die Work-Loop später Bescheid weiß
+									_joystick = null;
+									// Optional: Ein Log-Eintrag, damit der User weiß, warum der Joystick nicht geht
+									Console.WriteLine($"Joystick-Fehler an {Properties.Settings.Default.JoystickPort}: {ex.Message}");
+								}
+							}
+						};
+						// automatically  open/close joystick port, <deHarry, 2026-02-06>
+			*/
+
+			// automatically  open/close joystick or gamepad, <deHarry, 2026-06-08>
+			machine.ConnectionStateChanged += async () =>
+			{
+				try
+				{
+					if (machine.Connected)
+					{
+						// --- NEU: Wir warten 2 Sekunden, bis der Startup-Handshake durch ist ---
+						await System.Threading.Tasks.Task.Delay(2000);
+
+						// Erst jetzt, wenn alles ruhig ist, die Werte abholen
+						FetchGrblMaxFeeds();
+
+						if (Properties.Settings.Default.UseXInputGamePad)
+						{
+							if (_gamepad == null) _gamepad = new OpenCNCPilot.Communication.GamePadService(machine, this);
+							_gamepad.Open();
+						}
+						else if (!string.IsNullOrWhiteSpace(Properties.Settings.Default.JoystickPort) && !Properties.Settings.Default.JoystickPort.Equals("None", StringComparison.OrdinalIgnoreCase))
+						{
+							if (_joystick == null) _joystick = new OpenCNCPilot.Communication.JoystickService(Properties.Settings.Default.JoystickPort, Properties.Settings.Default.JoystickBaudrate, machine, this);
 							_joystick.Open();
 						}
-						else
-						{
-							if (_joystick != null) _joystick.Close();
-						}
 					}
-					catch (Exception ex)
+					else
 					{
-						// WICHTIG: Setze das Objekt auf null, damit die Work-Loop später Bescheid weiß
-						_joystick = null;
-						// Optional: Ein Log-Eintrag, damit der User weiß, warum der Joystick nicht geht
-						Console.WriteLine($"Joystick-Fehler an {Properties.Settings.Default.JoystickPort}: {ex.Message}");
+						if (_joystick != null) { _joystick.Close(); _joystick = null; }
+						if (_gamepad != null) { _gamepad.Close(); _gamepad = null; }
 					}
 				}
+				catch (Exception ex)
+				{
+					_joystick = null;
+					_gamepad = null;
+					Console.WriteLine($"Fehler beim Ändern des Verbindungsstatus für Controller: {ex.Message}");
+				}
 			};
-			// automatically  open/close joystick port, <deHarry, 2026-02-06>
+			// automatically  open/close joystick or gamepad, <deHarry, 2026-06-08>
 
 			openFileDialogGCode.FileOk += OpenFileDialogGCode_FileOk;
 			saveFileDialogGCode.FileOk += SaveFileDialogGCode_FileOk;
@@ -1369,5 +1457,402 @@ namespace OpenCNCPilot
 			}
 		}
 
-	} // Ende MainWindow
-} // Ende Namespace
+		// maxFeedRate für X-, Y- und Z-Achse von GRBL abfragen und in den Settings von OCP eintragen.
+		// Wird für Joystick und Gamepad benötigt.
+		// Dadurch entfällt das manuelle Einpflegen der Werte in die OCP Settings.
+		private void FetchGrblMaxFeeds()
+		{
+			if (!machine.Connected) return;
+
+			bool receivedAnySetting = false;
+
+			Action<string> grblSettingsHandler = null;
+			grblSettingsHandler = (line) =>
+			{
+				// Wir suchen nach den Zeilen $110=..., $111=... und $112=...
+				if (line.StartsWith("$") && line.Contains("="))
+				{
+					string[] parts = line.Split('=');
+					if (parts.Length == 2)
+					{
+						string id = parts[0].Trim();
+						if (double.TryParse(parts[1], System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out double val))
+						{
+							if (id == "$110") Properties.Settings.Default.JoystickMaxFeedX = val;
+							if (id == "$111") Properties.Settings.Default.JoystickMaxFeedY = val;
+							if (id == "$112") Properties.Settings.Default.JoystickMaxFeedZ = val;
+							receivedAnySetting = true; // Wir haben echte Settings gesehen!
+						}
+					}
+				}
+				// Nur abmelden, wenn wir vorher auch wirklich schon Einstellungsdaten verarbeitet haben
+				else if (line == "ok" && receivedAnySetting)
+				{
+					Properties.Settings.Default.Save();
+					machine.LineReceived -= grblSettingsHandler;
+					Console.WriteLine("GRBL Max-Feeds erfolgreich im Hintergrund aktualisiert.");
+				}
+			};
+
+			// Handler aktivieren und Befehl senden
+			machine.LineReceived += grblSettingsHandler;
+			machine.SendLine("$$");
+		}
+
+
+		#region DKW Modul Brücke
+
+		private void OnSetRefZ(object sender, RoutedEventArgs e)
+		{
+			// Wir nutzen MachinePosition.Z statt LastAbsZ
+			if (dkw.Start.X == 0 && dkw.Start.Y == 0)
+			{
+				dkw.RefZProbe = machine.MachinePosition.Z;
+				textDKWStatus.Text = "Ref-Z: Nadel (Taster) gespeichert.";
+			}
+			else
+			{
+				dkw.RefZMill = machine.MachinePosition.Z;
+				textDKWStatus.Text = "Ref-Z: Fräser gespeichert.";
+			}
+		}
+
+		// --- DKW Modul Logik ---
+
+		private void ProbeAndSavePoint(int pointIndex)
+		{
+			// 1. Aktuelle Werkstück-Koordinaten berechnen
+			// (Maschinenposition abzüglich des Nullpunkt-Offsets)
+			double x = machine.MachinePosition.X - machine.WorkOffset.X;
+			double y = machine.MachinePosition.Y - machine.WorkOffset.Y;
+			double z = machine.MachinePosition.Z - machine.WorkOffset.Z;
+
+			// 2. Falls der Simulations-Modus AUS ist (Checkbox nicht angewählt)
+			if (chkDKWTestMode.IsChecked == false)
+			{
+				if (!machine.Connected)
+				{
+					textDKWStatus.Text = "Status: Nicht verbunden!";
+					return;
+				}
+
+				// Sicherheitshöhe (Absolut) merken
+				double safetyZ = machine.MachinePosition.Z;
+
+				// Echter Tastvorgang
+				machine.SendLine("G91 G38.2 Z-10 F20"); // 10mm nach unten tasten
+				machine.SendLine($"G90 G0 Z{safetyZ}");  // Zurück auf Sicherheitshöhe
+
+				// Nach dem Tasten die neuen Koordinaten nehmen
+				x = machine.MachinePosition.X - machine.WorkOffset.X;
+				y = machine.MachinePosition.Y - machine.WorkOffset.Y;
+				z = machine.MachinePosition.Z - machine.WorkOffset.Z;
+			}
+
+			// 3. Visualisierung & Speicherung (jetzt einheitlich)
+			var displayPt = new Point3DCollection { new Point3D(x, y, z + 0.5) };
+
+			if (pointIndex == 0)
+			{
+				dkw.SetStart(x, y, z);
+				DKWStartPoint.Points = displayPt;
+				// Aufräumen bei Neustart
+				DKWMidPoint.Points = null;
+				DKWEndPoint.Points = null;
+				DKWArcPreview.Points = null;
+			}
+			else if (pointIndex == 1)
+			{
+				dkw.SetMid(x, y, z);
+				DKWMidPoint.Points = displayPt;
+			}
+			else if (pointIndex == 2)
+			{
+				dkw.SetEnd(x, y, z);
+				DKWEndPoint.Points = displayPt;
+
+				if (dkw.CalculatedRadius > 0)
+				{
+					DKWArcPreview.Points = dkw.GetArcPoints();
+				}
+			}
+
+			textDKWStatus.Text = dkw.Status;
+			UpdateButtonStates();
+
+			Application.Current.Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Input, new Action(() =>
+			{
+				// Falls OCP eine spezielle TextBox für das Jogging nutzt (oft 'FocusHolder'):
+				TextBoxJog.Focus(); 
+			}));
+		}
+
+		private void OnSetStart(object sender, RoutedEventArgs e) => ProbeAndSavePoint(0);
+		private void OnSetMid(object sender, RoutedEventArgs e) => ProbeAndSavePoint(1);
+		private void OnSetEnd(object sender, RoutedEventArgs e) => ProbeAndSavePoint(2);
+
+		/*		private void UpdateButtonStates()
+				{
+					if (dkw == null) return;
+
+					// Prüfen, ob wir valide Geometrie haben
+					bool geometryReady = dkw.CalculatedRadius > 0;
+
+					// Prüfen, ob wir bereits Messpunkte aus dem Auto-Probe haben
+					bool hasMeasuredPoints = dkw.MeasuredWallPoints.Count > 0;
+
+					// Set-Buttons: Mid braucht Start, End braucht Mid
+					if (btnSetMid != null) btnSetMid.IsEnabled = (dkw.Start.X != 0 || dkw.Start.Y != 0);
+					if (btnSetEnd != null) btnSetEnd.IsEnabled = (dkw.Mid.X != 0 || dkw.Mid.Y != 0);
+
+					// START AUTO-PROBE: Aktivieren, sobald der Kreis berechnet wurde
+					if (btnStartAutoProbe != null) btnStartAutoProbe.IsEnabled = geometryReady;
+
+					// START MILLING: Erst aktivieren, wenn wir die Schiene tatsächlich getastet haben
+					if (btnStartMilling != null) btnStartMilling.IsEnabled = hasMeasuredPoints;
+				}
+		*/
+
+		private void UpdateButtonStates()
+		{
+			if (dkw == null) return;
+
+			// 1. Status-Flags ermitteln
+			bool hasStart = dkw.Start.X != 0 || dkw.Start.Y != 0;
+			bool hasMid = dkw.Mid.X != 0 || dkw.Mid.Y != 0;
+			bool geometryReady = dkw.CalculatedRadius > 0;
+			bool hasMeasuredPoints = dkw.MeasuredWallPoints != null && dkw.MeasuredWallPoints.Count > 0;
+
+			// 2. Buttons aktivieren/deaktivieren
+			if (btnSetMid != null) btnSetMid.IsEnabled = hasStart;
+			if (btnSetEnd != null) btnSetEnd.IsEnabled = hasMid;
+
+			// START AUTO-PROBE: Nur wenn Radius berechnet
+			if (btnStartAutoProbe != null) btnStartAutoProbe.IsEnabled = geometryReady;
+
+			// START MILLING: Erst wenn Messdaten vorhanden sind
+			if (btnStartMilling != null) btnStartMilling.IsEnabled = hasMeasuredPoints;
+
+			// 3. Dynamische Status-Texte (Englisch)
+			if (textDKWStatus != null)
+			{
+				if (!hasStart)
+					textDKWStatus.Text = "Status: Please set Start point.";
+				else if (!hasMid)
+					textDKWStatus.Text = "Status: Start set - next: set Mid point.";
+				else if (!geometryReady)
+					textDKWStatus.Text = "Status: Mid set - next: set End point.";
+				else if (!hasMeasuredPoints)
+					textDKWStatus.Text = $"Status: Ready - Radius: {dkw.CalculatedRadius:F1} mm. Next: START AUTO-PROBE.";
+				else
+					textDKWStatus.Text = "Status: Probing complete. Ready to START MILLING.";
+			}
+		}
+
+		private async void OnStartAutoProbe(object sender, RoutedEventArgs e)
+		{
+			if (dkw == null || machine == null) return; 
+			if (dkw.CalculatedRadius <= 0) return;
+
+			if (ButtonDisconnect != null) ButtonDisconnect.IsEnabled = false;
+
+			// Das ist unser digitaler "Wartezettel"
+			TaskCompletionSource<bool> grblReady = null;
+
+			// Der Handler, der auf das RaiseEvent(LineReceived, line) reagiert
+			// Der Handler als einfache Action (passend zur Machine-Klasse)
+			Action<string> lineHandler = null;
+			lineHandler = (line) =>
+			{
+				if (line == "ok" || line.StartsWith("[PRB:"))
+				{
+					grblReady?.TrySetResult(true);
+				}
+			};
+
+			// Event abonnieren
+			machine.LineReceived += lineHandler; 
+			
+			try
+			{
+				// Werte aus der GUI holen
+				if (double.TryParse(txtProbeDiam.Text, out double pDiam)) dkw.ProbeDiameter = pDiam;
+
+				// Sicherheitshöhe (2mm über aktueller Z-Maschinenposition)
+				double safetyZ = machine.MachinePosition.Z + 2.0;
+
+				var tasks = dkw.GenerateProbeTasks(2.0); // Alle 2mm ein Punkt
+				textDKWStatus.Text = $"Starte Messung: {tasks.Count} Punkte.";
+
+				foreach (var task in tasks)
+				{
+					// 1. Über Punkt fahren (G54 System)
+					machine.SendLine($"G0 Z{safetyZ:F3}");
+					machine.SendLine($"G0 X{task.EntryPoint.X + machine.WorkOffset.X:F3} Y{task.EntryPoint.Y + machine.WorkOffset.Y:F3}");
+
+					// 2. Eintauchen
+					//machine.SendLine($"G0 Z{task.EntryPoint.Z + machine.WorkOffset.Z:F3}");
+					// 2. Vorsichtiges Eintauchen (G1 statt G0 ist sicherer für den 0,6mm Draht!)
+					machine.SendLine($"G1 Z{task.EntryPoint.Z + machine.WorkOffset.Z:F3} F100");
+
+					// 3. Tasten (G38.2)
+					// Hier nutzen wir ein Delay als einfachste Form der Synchronisation
+					// (Für eine echte Event-Abfrage müssten wir tiefer in die OCP-Kommunikation)
+					machine.SendLine($"G38.2 X{task.TargetPoint.X + machine.WorkOffset.X:F3} Y{task.TargetPoint.Y + machine.WorkOffset.Y:F3} F20");
+
+					// Wir geben GRBL Zeit zum Antworten (einfaches Delay für den ersten Test)
+					//await System.Threading.Tasks.Task.Delay(1500); // Warten auf GRBL-Antwort
+
+					// WARTEN: Hier pausiert der Code, bis das 'ok' vom RaiseEvent kommt (max. 10 Sek)
+					var completedTask = await Task.WhenAny(grblReady.Task, Task.Delay(10000));
+
+					if (completedTask != grblReady.Task)
+					{
+						textDKWStatus.Text = "Timeout: GRBL antwortet nicht!";
+						break;
+					}
+
+					// 4. Punkt speichern (Wir nutzen die Position nach dem Stop)
+					dkw.AddMeasuredPoint(machine.MachinePosition.X, machine.MachinePosition.Y, machine.MachinePosition.Z,
+										 machine.WorkOffset.X, machine.WorkOffset.Y);
+
+					// Visualisierung aktualisieren
+					if (DKWMeasuredPoints != null)
+						DKWMeasuredPoints.Points = new Point3DCollection(dkw.MeasuredWallPoints);
+
+					// 5. Kurzer Rückzug
+					machine.SendLine($"G0 X{task.EntryPoint.X + machine.WorkOffset.X:F3} Y{task.EntryPoint.Y + machine.WorkOffset.Y:F3}");
+				}
+
+				machine.SendLine($"G0 Z{safetyZ:F3}");
+				textDKWStatus.Text = "Messung beendet.";
+			}
+			catch (Exception ex)
+			{
+				textDKWStatus.Text = "Fehler: " + ex.Message;
+			}
+			finally
+			{
+				// GANZ WICHTIG: Event-Handler wieder entfernen, sonst hagelt es Fehlermeldungen
+				machine.LineReceived -= lineHandler;                
+				
+				// SPERRE AUFHEBEN (wird IMMER ausgeführt, egal was passiert)
+				if (ButtonDisconnect != null) ButtonDisconnect.IsEnabled = true;
+				UpdateButtonStates();
+			}
+		}
+
+		private async void OnStartMilling(object sender, RoutedEventArgs e)
+		{
+			if (dkw.MeasuredWallPoints.Count < 2)
+			{
+				MessageBox.Show("Keine Messdaten vorhanden. Bitte zuerst AUTO-PROBE ausführen.");
+				return;
+			}
+
+			// 1. Werte aus der GUI parsen
+			double totalRemoval = 0; // Wie viel muss seitlich weg?
+			double stepoverH = 0;    // Horizontale Zustellung
+			double stepdownV = 0;    // Vertikale Zustellung pro Durchgang
+
+			double.TryParse(txtWallRemoval.Text, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out totalRemoval);
+			double.TryParse(txtStepover.Text, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out stepoverH);
+			double.TryParse(txtStepdown.Text, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out stepdownV);
+
+			// Sicherheitschecks für die Berechnungen
+			if (totalRemoval < 0) totalRemoval = 0;
+			if (stepoverH <= 0) stepoverH = totalRemoval > 0 ? totalRemoval : 0.1;
+			if (stepdownV <= 0) stepdownV = 100; // Wenn 0 oder falsch, alles in einem Z-Schritt (großer Wert)
+
+			if (ButtonDisconnect != null) ButtonDisconnect.IsEnabled = false;
+
+			try
+			{
+				double millRadius = dkw.MillDiameter / 2.0;
+				double safetyZ = machine.MachinePosition.Z + 2.0;
+				double feedRate = 200;
+
+				// Berechnung der Durchgänge
+				int passesH = (int)Math.Ceiling(totalRemoval / stepoverH);
+
+				// Wir ermitteln die tiefste Stelle aus den Messpunkten
+				double minZ = 0;
+				foreach (var p in dkw.MeasuredWallPoints) if (p.Z < minZ) minZ = p.Z;
+
+				// Anzahl der vertikalen Schnitte (Z-Zustellung)
+				int passesV = (int)Math.Ceiling(Math.Abs(minZ) / stepdownV);
+				if (passesV < 1) passesV = 1;
+
+				textDKWStatus.Text = "Fräsvorgang startet...";
+				machine.SendLine($"G0 Z{safetyZ:F3}");
+
+				// --- SCHLEIFE 1: VERTIKALE EBENEN (Z) ---
+				for (int v = 1; v <= passesV; v++)
+				{
+					// Aktuelle Frästiefe berechnen (Z ist negativ)
+					double currentZ = -(v * stepdownV);
+					if (currentZ < minZ) currentZ = minZ; // Nicht tiefer als gemessen
+
+					// --- SCHLEIFE 2: HORIZONTALE BAHNEN (XY-Versatz) ---
+					for (int h = 1; h <= passesH; h++)
+					{
+						double currentOffset = totalRemoval - (h * stepoverH);
+						if (currentOffset < 0) currentOffset = 0;
+
+						textDKWStatus.Text = $"Z:{currentZ:F1} | Bahn {h}/{passesH} (Offset: {currentOffset:F2})";
+
+						// --- SCHLEIFE 3: DER PFAD (Punkte) ---
+						for (int i = 0; i < dkw.MeasuredWallPoints.Count; i++)
+						{
+							Point3D wallPt = dkw.MeasuredWallPoints[i];
+
+							double dx = wallPt.X - dkw.CircleCenter.X;
+							double dy = wallPt.Y - dkw.CircleCenter.Y;
+							double dist = Math.Sqrt(dx * dx + dy * dy);
+
+							double ux = dx / dist;
+							double uy = dy / dist;
+
+							double targetDist = millRadius + currentOffset;
+							double millX = wallPt.X - (ux * targetDist);
+							double millY = wallPt.Y - (uy * targetDist);
+
+							double gX = millX + machine.WorkOffset.X;
+							double gY = millY + machine.WorkOffset.Y;
+							double gZ = currentZ + machine.WorkOffset.Z; // Nutze die aktuelle Ebenen-Tiefe
+
+							if (i == 0)
+							{
+								// Anfahren und Eintauchen auf aktuelle Ebene
+								machine.SendLine($"G0 X{gX:F3} Y{gY:F3}");
+								machine.SendLine($"G1 Z{gZ:F3} F100");
+							}
+							else
+							{
+								machine.SendLine($"G1 X{gX:F3} Y{gY:F3} F{feedRate}");
+							}
+
+							await System.Threading.Tasks.Task.Delay(50);
+						}
+
+						// Nach jeder horizontalen Bahn kurz abheben zur Sicherheit
+						machine.SendLine($"G0 Z{safetyZ:F3}");
+					}
+				}
+
+				textDKWStatus.Text = "Fräsvorgang erfolgreich beendet.";
+			}
+			catch (Exception ex)
+			{
+				MessageBox.Show("Fehler beim Fräsen: " + ex.Message);
+			}
+			finally
+			{
+				if (ButtonDisconnect != null) ButtonDisconnect.IsEnabled = true;
+				UpdateButtonStates();
+			}
+		}
+		#endregion
+
+	} // Ende der Klasse MainWindow
+} // Ende des Namespaces

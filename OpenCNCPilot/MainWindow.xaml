@@ -15,7 +15,13 @@
         KeyDown="Window_KeyDown"
 		Title="{Binding WindowTitle,Mode=OneWay}" Height="1005.5" Width="1400" Closing="Window_Closing">
     <Window.Resources>
-        <ResourceDictionary Source="MainWindow.Resources.xaml"/>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="MainWindow.Resources.xaml"/>
+            </ResourceDictionary.MergedDictionaries>
+
+            <BooleanToVisibilityConverter x:Key="BoolToVis"/>
+        </ResourceDictionary>
     </Window.Resources>
     <Grid>
         <Grid Panel.ZIndex="1" Grid.ColumnSpan="5">
@@ -401,7 +407,7 @@
                                         <Hyperlink RequestNavigate="Hyperlink_RequestNavigate" NavigateUri="https://github.com/deHarro/OpenCNCPilot" TextDecorations="None">Mod: deHarro</Hyperlink>
                                     </TextBlock>
 
-                                    <TextBlock Text=" - v1.12, 2026-03-29" 
+                                    <TextBlock Text=" - v1.14, 2026-06-08" 
                                        Foreground="Gray" 
                                        FontSize="10" />
                                 </StackPanel>
@@ -411,7 +417,7 @@
                                         <TextBlock FontSize="10">
                                             <StackPanel Margin="3">
                                                 <TextBlock Text="Version History:" FontWeight="Bold" Margin="0,0,0,5"/>
-                                                <TextBlock Text="v1.1: Joystick-Jogging"/>
+                                                <TextBlock Text="v1.1: Implement Joystick-Jogging"/>
                                                 <TextBlock Text="v1.2: Layer-Stacking"/>
                                                 <TextBlock Text="v1.3: GCode-Filter"/>
                                                 <TextBlock Text="v1.4: Sort Layerlist"/>
@@ -420,9 +426,11 @@
                                                 <TextBlock Text="v1.7: Jump to G-Code line, Distances corrected, added markers"/>
                                                 <TextBlock Text="v1.8: Fix Rotate Origin, fix Lay-Flat"/>
                                                 <TextBlock Text="v1.9: Save Viewport Orientation in Settings and set Design accordingly"/>
-                                                <TextBlock Text="v1.10: Fix Rotation logic and synchronization timing"/>
+                                                <TextBlock Text="v1.10: Fix Viewport Rotation logic and synchronization timing"/>
                                                 <TextBlock Text="v1.11: Fix display of Limit and Probe notifications"/>
                                                 <TextBlock Text="v1.12: Fix 'new CH340 driver' problem"/>
+                                                <TextBlock Text="v1.13: Add 'Special Probing' for sideways probing and milling curved walls"/>
+                                                <TextBlock Text="v1.14: Implement GamePad-Jogging, get MaxFeeds from GRBL"/>
                                             </StackPanel>
                                         </TextBlock>
                                     </ToolTip>
@@ -553,10 +561,90 @@
                                     </Style>
                                 </CheckBox.Resources>
                             </CheckBox>
-
                         </StackPanel>
                     </Expander>
                 </Border>
+<!--Visibility="{util:SettingBinding ShowDKWModule, Converter={StaticResource BoolToVis}}"-->
+                <Border Style="{StaticResource stylePanelOut}"  >
+                    <Expander Header="Special Probing &amp; Milling" IsExpanded="{util:SettingBinding DKWExpanderOpen}">
+                            <StackPanel HorizontalAlignment="Left" Margin="10,5,5,5">
+                            <Grid Margin="0,3,0,5">
+                                <Grid.ColumnDefinitions  >
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                </Grid.RowDefinitions>
+                                <Button x:Name="btnSetStart"        Content="Set Start" Click="OnSetStart" Grid.Column="1" Grid.Row="0" Margin="1"/>
+                                <Button x:Name="btnSetMid"          Content="Set Mid"   Click="OnSetMid"   Grid.Column="1" Grid.Row="1" Margin="1" IsEnabled="False"/>
+                                <Button x:Name="btnSetEnd"          Content="Set End"   Click="OnSetEnd"   Grid.Column="1" Grid.Row="2" Margin="1" IsEnabled="False"/>
+                                <CheckBox x:Name="chkDKWTestMode"   Content="Simu"                         Grid.Column="0" Grid.Row="2" Margin="1" IsEnabled="True"
+                                    IsChecked="{util:SettingBinding ProbeSimulation}" 
+                                    VerticalAlignment="Center" FlowDirection="RightToLeft" >
+                                    <CheckBox.Resources>
+                                        <Style TargetType="{x:Type Path}">
+                                            <Setter Property="FlowDirection" Value="LeftToRight" />
+                                        </Style>
+                                    </CheckBox.Resources>
+                                </CheckBox>
+                                <Button Content="Set Ref-Z" Grid.Column="0  " Grid.Row="0" 
+                                Margin="1" Background="LightBlue" Click="OnSetRefZ"/>
+                            </Grid>
+
+                            <Separator Margin="0,5,0,0"/>
+
+                            <Label Content="Following Values in [mm]" FlowDirection="LeftToRight" HorizontalContentAlignment="Right" Foreground="Gray"  Margin="1"/>
+
+                            <StackPanel Orientation="Horizontal" Margin="0">
+                                <TextBox x:Name="txtWallRemoval" 
+                                    Text="{util:SettingBinding DKWWallRemoval, UpdateSourceTrigger=LostFocus}" 
+                                    HorizontalContentAlignment="Center" Width="40" VerticalAlignment="Center" Margin="1"/>
+                                <Label Content="Wall Removal:"  FlowDirection="LeftToRight" />
+                            </StackPanel>
+
+                            <StackPanel Orientation="Horizontal" Margin="0">
+                                <TextBox x:Name="txtStepover" 
+                                    Text="{util:SettingBinding DKWStepOverH, UpdateSourceTrigger=LostFocus}"  
+                                    HorizontalContentAlignment="Center" Width="40" VerticalAlignment="Center" Margin="1"/>
+                                <Label Content="Horizontal Stepsize:" FlowDirection="LeftToRight" />
+                            </StackPanel>
+
+                            <StackPanel Orientation="Horizontal" Margin="0">
+                                <TextBox x:Name="txtStepdown" 
+                                    Text="{util:SettingBinding DKWStepDownV, UpdateSourceTrigger=LostFocus}"  
+                                    HorizontalContentAlignment="Center"  Width="40" VerticalAlignment="Center" Margin="1"/>
+                                <Label Content="Vertical Stepsize:" FlowDirection="LeftToRight" />
+                           </StackPanel>
+
+                            <StackPanel Orientation="Horizontal" Margin="1,1,0,5">
+                                <TextBox x:Name="txtProbeDiam" Text="{util:SettingBinding DKWProbeDiameter, UpdateSourceTrigger=LostFocus}" Width="40" VerticalAlignment="Center" Margin="0" HorizontalContentAlignment="Center"  />
+                                <Label Content="Taster-Ø:" Width="57" FlowDirection="LeftToRight"/>
+                                <TextBox x:Name="txtMillDiam" Text="{util:SettingBinding DKWMillDiameter, UpdateSourceTrigger=LostFocus}" Width="40" VerticalAlignment="Center" HorizontalContentAlignment="Center" />
+                                <Label Content="Fräser-Ø:" Width="60" FlowDirection="LeftToRight"/>
+                            </StackPanel>
+
+                            <Separator Margin="0,1,0,8"/>
+
+                            <Button x:Name="btnStartAutoProbe" Content="START AUTO-PROBE" Click="OnStartAutoProbe" Height="30" FontWeight="Bold"  IsEnabled="False" Margin="1,1,1,5" />
+                            <Button x:Name="btnStartMilling" Content="START MILLING" Click="OnStartMilling" Height="30"  IsEnabled="False" Margin="1,1,1,5" />
+
+                            <Separator Margin="0,0,0,5"/>
+
+                                <TextBlock x:Name="textDKWStatus" 
+                                   Text="Status: Bereit" 
+                                   Margin="0,5,0,10" 
+                                   FontSize="12" 
+                                   Foreground="Black" 
+                                   HorizontalAlignment="Center"
+                                   TextWrapping="Wrap"
+                                   FlowDirection="LeftToRight"/>
+                        </StackPanel>
+                        </Expander>
+                </Border>
+
             </StackPanel>
 
             <ListBox Name="ListBoxHistory" HorizontalContentAlignment="Right"  HorizontalAlignment="Right" VerticalAlignment="Bottom" IsHitTestVisible="False" BorderThickness="0" Background="Transparent" ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Disabled">
@@ -594,7 +682,12 @@
             <h:LinesVisual3D Thickness="0.5" Color="Gray" x:Name="ModelRapid"/>
             <h:LinesVisual3D Thickness="1" Color="Black" x:Name="ModelLine"/>
             <h:LinesVisual3D Thickness="1" Color="Blue" x:Name="ModelArc"/>
+            <h:LinesVisual3D x:Name="DKWArcPreview" Color="Lime" Thickness="3"/>
             <h:ArrowVisual3D x:Name="ModelTool" Direction="0,0,-10"/>
+            <h:PointsVisual3D x:Name="DKWStartPoint" Color="Red" Size="10"/>
+            <h:PointsVisual3D x:Name="DKWMidPoint" Color="Yellow" Size="10"/>
+            <h:PointsVisual3D x:Name="DKWEndPoint" Color="Lime" Size="10"/>
+            <h:PointsVisual3D x:Name="DKWMeasuredPoints" Color="Cyan" Size="5"/>
             <h:GridLinesVisual3D
                 x:Name="ModelGrid"
 				Width="500" Length="500" 

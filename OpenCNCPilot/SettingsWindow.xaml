@@ -7,7 +7,7 @@
 		xmlns:util="clr-namespace:OpenCNCPilot.Util"
 		xmlns:sys="clr-namespace:System;assembly=mscorlib"
 		mc:Ignorable="d"
-		Title="SettingsWindow" Height="410" Width="390" Closed="Window_Closed" ResizeMode="NoResize">
+		Title="SettingsWindow" Height="435" Width="390" Closed="Window_Closed" ResizeMode="NoResize">
     <Window.Resources>
         <Style TargetType="TextBox">
             <Setter Property="VerticalContentAlignment" Value="Center"/>
@@ -24,7 +24,7 @@
                 <Label Content="Connection Type" HorizontalAlignment="Left" Margin="134,3,0,0" VerticalAlignment="Top"/>
                 <ComboBox x:Name="comboBoxConnectionType" Margin="10,4,0,0" Width="120" VerticalAlignment="Top" HorizontalAlignment="Left" SelectedValue="{util:SettingBinding ConnectionType}"/>
 
-                <Grid HorizontalAlignment="Left" Height="163" Margin="0,31,0,0" VerticalAlignment="Top" Width="374">
+                <Grid HorizontalAlignment="Left" Height="188" Margin="0,31,0,0" VerticalAlignment="Top" Width="374">
                     <Grid.Style>
                         <Style TargetType="Grid">
                             <Setter Property="Visibility" Value="Hidden"/>
@@ -41,18 +41,25 @@
                     <TextBox Margin="10,32,0,0" Text="{util:SettingBinding SerialPortBaud}"/>
                     <Label Content="GRBL BaudRate" HorizontalAlignment="Left" Margin="135,31,0,0" VerticalAlignment="Top"/>
 
-                    <ComboBox x:Name="ComboBoxJoystickPort" 
-                          VerticalAlignment="Top" 
-                          HorizontalAlignment="Left" 
-                          Margin="10,86,0,0" 
-                          Width="120" 
-                          SelectedValuePath="Tag" 
-                          SelectedValue="{util:SettingBinding JoystickPort}" 
-                          DropDownOpened="ComboBoxSerialPort_DropDownOpened"/>
-                    <Label Content="Serial Port (Joystick)" HorizontalAlignment="Left" Margin="135,85,0,0" VerticalAlignment="Top"/>
+                    <CheckBox Content="USB Gamepad (XInput) verwenden" HorizontalAlignment="Left" Margin="10,86,0,0" VerticalAlignment="Top" IsChecked="{util:SettingBinding UseXInputGamePad}"/>
 
-                    <TextBox Margin="10,113,0,0" Text="{util:SettingBinding JoystickBaudrate}"/>
-                    <Label Content="Joystick BaudRate" HorizontalAlignment="Left" Margin="135,112,0,0" VerticalAlignment="Top"/>
+                    <Grid HorizontalAlignment="Left" VerticalAlignment="Top" Margin="0,105,0,0" Width="374" Height="65">
+                        <Grid.Style>
+                            <Style TargetType="Grid">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{util:SettingBinding UseXInputGamePad}" Value="True">
+                                        <Setter Property="IsEnabled" Value="False"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Grid.Style>
+
+                        <ComboBox x:Name="ComboBoxJoystickPort" VerticalAlignment="Top" HorizontalAlignment="Left" Margin="10,6,0,0" Width="120" SelectedValuePath="Tag" SelectedValue="{util:SettingBinding JoystickPort}" DropDownOpened="ComboBoxSerialPort_DropDownOpened"/>
+                        <Label Content="Serial Port (Joystick)" HorizontalAlignment="Left" Margin="135,5,0,0" VerticalAlignment="Top"/>
+
+                        <TextBox Margin="10,33,0,0" Text="{util:SettingBinding JoystickBaudrate}"/>
+                        <Label Content="Joystick BaudRate" HorizontalAlignment="Left" Margin="135,32,0,0" VerticalAlignment="Top"/>
+                    </Grid>
                 </Grid>
 
                 <Grid HorizontalAlignment="Left" Height="58" Margin="0,34,0,0" VerticalAlignment="Top" Width="374">
@@ -75,17 +82,17 @@
 
                 <CheckBox Content="Reset grbl when connecting" HorizontalAlignment="Left" Margin="116,92,0,0" VerticalAlignment="Top" IsChecked="{util:SettingBinding SerialPortDTR}" ToolTip="the DTR signal is used to reset grbl when the connection is established, set by default on many other gcode senders" Height="15"/>
 
-                <TextBox Margin="10,200,0,0" Text="{util:SettingBinding ControllerBufferSize}"/>
-                <Label Content="Controller Buffer" HorizontalAlignment="Left" Margin="135,199,0,0" VerticalAlignment="Top"/>
+                <TextBox Margin="10,225,0,0" Text="{util:SettingBinding ControllerBufferSize}"/>
+                <Label Content="Controller Buffer" HorizontalAlignment="Left" Margin="135,224,0,0" VerticalAlignment="Top"/>
 
-                <TextBox Margin="10,228,0,0" Text="{util:SettingBinding StatusPollInterval}"/>
-                <Label Content="Status Poll Interval (ms)" HorizontalAlignment="Left" Margin="135,227,0,0" VerticalAlignment="Top"/>
+                <TextBox Margin="10,253,0,0" Text="{util:SettingBinding StatusPollInterval}"/>
+                <Label Content="Status Poll Interval (ms)" HorizontalAlignment="Left" Margin="135,252,0,0" VerticalAlignment="Top"/>
 
-                <CheckBox Content="Log traffic to file" HorizontalAlignment="Left" Margin="116,256,0,0" VerticalAlignment="Top" IsChecked="{util:SettingBinding LogTraffic}" ToolTip="Restart required to take effect"/>
-                <CheckBox Content="Ignore Additional Axes in Status Messages" HorizontalAlignment="Left" Margin="116,276,0,0" VerticalAlignment="Top" IsChecked="{util:SettingBinding IgnoreAdditionalAxes}" ToolTip="Compatibility with custom GRBL versions which report 4+ axes in status reports"/>
+                <CheckBox Content="Log traffic to file" HorizontalAlignment="Left" Margin="116,281,0,0" VerticalAlignment="Top" IsChecked="{util:SettingBinding LogTraffic}" ToolTip="Restart required to take effect"/>
+                <CheckBox Content="Ignore Additional Axes in Status Messages" HorizontalAlignment="Left" Margin="116,301,0,0" VerticalAlignment="Top" IsChecked="{util:SettingBinding IgnoreAdditionalAxes}" ToolTip="Compatibility with custom GRBL versions which report 4+ axes in status reports"/>
 
-                <Label Content="Board firmware" HorizontalAlignment="Left" Margin="135,297,0,0" VerticalAlignment="Top" Height="27"/>
-                <ComboBox x:Name="FirmwareType" HorizontalAlignment="Left" VerticalAlignment="Top" Width="120" Margin="10,299,0,0"  SelectedItem="{util:SettingBinding FirmwareType}" SelectionChanged="FirmwareType_SelectionChanged" Height="23">
+                <Label Content="Board firmware" HorizontalAlignment="Left" Margin="135,322,0,0" VerticalAlignment="Top" Height="27"/>
+                <ComboBox x:Name="FirmwareType" HorizontalAlignment="Left" VerticalAlignment="Top" Width="120" Margin="10,324,0,0"  SelectedItem="{util:SettingBinding FirmwareType}" SelectionChanged="FirmwareType_SelectionChanged" Height="23">
                     <sys:String>Grbl</sys:String>
                     <sys:String>uCNC</sys:String>
                 </ComboBox>
@@ -124,7 +131,7 @@
                 <Label Content="Retraction height for large moves (mm)" HorizontalAlignment="Left" Margin="135,60,0,0" VerticalAlignment="Top"/>
 
                 <TextBox Margin="10,100,0,0" Text="{util:SettingBinding ProbeMinimumHeight}" ToolTip="This height will be added to the height of the last probe point to prevent crashes on highly tilted surfaces"/>
-                <TextBlock Text="Retraction height for short moves (mm)      (the height of the highest neighbouring point is added to this height)" HorizontalAlignment="Left" Margin="137,87,0,0" VerticalAlignment="Top" TextWrapping="WrapWithOverflow" Width="231"/>
+                <TextBlock Text="Retraction height for short moves (mm)      (the height of the highest neighbouring point is added to this height)" HorizontalAlignment="Left" Margin="142,87,0,0" VerticalAlignment="Top" TextWrapping="WrapWithOverflow" Width="231"/>
 
                 <TextBox Margin="10,141,0,0" Text="{util:SettingBinding ProbeMaxDepth}"/>
                 <Label Content="Max Depth (mm)" HorizontalAlignment="Left" Margin="135,140,0,0" VerticalAlignment="Top"/>
@@ -133,6 +140,17 @@
                 <Label Content="Probe X-Axis Weight" HorizontalAlignment="Left" Margin="135,168,0,0" VerticalAlignment="Top" ToolTip="Use this value to tell OpenCNCPilot to prefer to move X or Y preferably when probing. This is useful if one of both axes is lighter or faster than the other. Values smaller or greater than 1.0 change the preferred axis, 1.0 means no preferred axis."/>
 
                 <CheckBox Content="Auto-Backup HeightMap when complete" HorizontalAlignment="Left" Margin="116,199,0,0" VerticalAlignment="Top" IsChecked="{util:SettingBinding BackupHeightMap}" ToolTip="Backups are stored in the same folder as OpenCNCPilot.exe"/>
+
+
+                <Separator HorizontalAlignment="Left" Margin="10,234,0,0" VerticalAlignment="Top" Width="330"/>
+
+                <CheckBox Content="DKW Nachbearbeitungs-Modul aktivieren" 
+                  HorizontalAlignment="Left" 
+                  Margin="116,248,0,0" 
+                  VerticalAlignment="Top" 
+                  IsChecked="{util:SettingBinding ShowDKWModule}" 
+                  ToolTip="Aktiviert die spezialisierte Weichen-Bearbeitung in der rechten Seitenleiste."/>
+
             </Grid>
         </TabItem>
 
@@ -147,8 +165,8 @@
                 <CheckBox Content="Filter Zero-Length Moves" HorizontalAlignment="Left" Margin="116,130,0,0" VerticalAlignment="Top" IsChecked="{util:SettingBinding GCodeFilterZeroMoves}" ToolTip="Remove redundant moves to the same coordinate to avoid 'zero-length' warnings."/>
             </Grid>
         </TabItem>
-        
-        <TabItem Header="Joystick">
+
+        <TabItem Header="Joystick / Gamepad">
             <ScrollViewer VerticalScrollBarVisibility="Auto">
                 <StackPanel Margin="10">
                     <Grid>
@@ -158,50 +176,15 @@
                         </Grid.ColumnDefinitions>
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto" />
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="Auto" />
                         </Grid.RowDefinitions>
 
                         <TextBox Grid.Row="0" Grid.Column="0" Height="23" Margin="0,5" 
-             VerticalAlignment="Top" HorizontalContentAlignment="Right"
-             Text="{util:SettingBinding JoystickDt}"/>
+                                 VerticalAlignment="Top" HorizontalContentAlignment="Right"
+                                 Text="{util:SettingBinding JoystickDt, UpdateSourceTrigger=LostFocus}"/>
                         <StackPanel Grid.Row="0" Grid.Column="1" Margin="10,5,0,15">
                             <TextBlock Text="Timing (dt)" FontWeight="Bold" />
                             <TextBlock Text="Zeitfenster für GRBL-Befehle (Sekunden). Höhere Werte (z.B. 0.15) machen den Lauf weicher, erhöhen aber den Nachlauf beim Loslassen." 
-                   TextWrapping="Wrap" Foreground="Gray" FontSize="11"/>
-                        </StackPanel>
-
-                        <TextBlock Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2" 
-               Text="Die Werte für Max Feed der einzelnen Achsen müssen mit den entsprechenden Angaben in GRBL übereinstimmen." 
-               FontWeight="SemiBold" Foreground="#FF4444" Margin="0,5,0,5" TextWrapping="Wrap"/>
-
-                        <TextBox Grid.Row="2" Grid.Column="0" Height="23" Margin="0,5" 
-             VerticalAlignment="Top" HorizontalContentAlignment="Right"
-             Text="{util:SettingBinding JoystickMaxFeedX}"/>
-                        <StackPanel Grid.Row="2" Grid.Column="1" Margin="10,5,0,15">
-                            <TextBlock Text="Max Feed X (mm/min)" FontWeight="Bold" />
-                            <TextBlock Text="Maximale Geschwindigkeit für die X-Achse während des Joggens." 
-                   TextWrapping="Wrap" Foreground="Gray" FontSize="11"/>
-                        </StackPanel>
-
-                        <TextBox Grid.Row="3" Grid.Column="0" Height="23" Margin="0,5" 
-             VerticalAlignment="Top" HorizontalContentAlignment="Right"
-             Text="{util:SettingBinding JoystickMaxFeedY}"/>
-                        <StackPanel Grid.Row="3" Grid.Column="1" Margin="10,5,0,15">
-                            <TextBlock Text="Max Feed Y (mm/min)" FontWeight="Bold" />
-                            <TextBlock Text="Maximale Geschwindigkeit für die Y-Achse während des Joggens." 
-                   TextWrapping="Wrap" Foreground="Gray" FontSize="11"/>
-                        </StackPanel>
-
-                        <TextBox Grid.Row="4" Grid.Column="0" Height="23" Margin="0,5" 
-             VerticalAlignment="Top" HorizontalContentAlignment="Right"
-             Text="{util:SettingBinding JoystickMaxFeedZ}"/>
-                        <StackPanel Grid.Row="4" Grid.Column="1" Margin="10,5,0,10">
-                            <TextBlock Text="Max Feed Z (mm/min)" FontWeight="Bold" />
-                            <TextBlock Text="Maximale Geschwindigkeit für die Z-Achse." 
-                   TextWrapping="Wrap" Foreground="Gray" FontSize="11"/>
+                                       TextWrapping="Wrap" Foreground="Gray" FontSize="11"/>
                         </StackPanel>
                     </Grid>
                 </StackPanel>
