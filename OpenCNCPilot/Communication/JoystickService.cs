@@ -43,6 +43,7 @@ using System.Globalization;
 using System.IO.Ports;
 using System.Timers;
 using System.Threading;
+using System.Windows;
 
 
 namespace OpenCNCPilot.Communication
@@ -53,7 +54,10 @@ namespace OpenCNCPilot.Communication
         private SerialPort _serialPort;
         private OpenCNCPilot.MainWindow _parent;
         private System.Timers.Timer _jogTimer;
+        private System.Timers.Timer _watchdogTimer; // <-- NEU
 
+        private DateTime _lastJoystickDataTime = DateTime.MinValue;
+        private bool _lastUiEnabled = false;
         private double _joyX, _joyY, _joyZ;
         private bool _isJogging = false;
 
@@ -63,10 +67,16 @@ namespace OpenCNCPilot.Communication
         {
             _machine = machine;
             _parent = parent;
+
             _jogTimer = new System.Timers.Timer(TIMER_INTERVAL_MS);
             _jogTimer.Elapsed += OnJogTimerTick;
             _jogTimer.AutoReset = true;
 
+            // --- Joystick Watchdog initialisieren ---
+            _watchdogTimer = new System.Timers.Timer(100);
+            _watchdogTimer.Elapsed += OnWatchdogTimerTick;
+            _watchdogTimer.AutoReset = true;
+            
             if (!string.IsNullOrWhiteSpace(portName) && !portName.Equals("None", StringComparison.OrdinalIgnoreCase))
             {
                 try
@@ -99,6 +109,7 @@ namespace OpenCNCPilot.Communication
 
                 // Start des Siphons
                 Thread t = new Thread(JoystickWorker);
+                _watchdogTimer.Start();
                 t.IsBackground = true;
                 t.Start();
 
@@ -113,6 +124,7 @@ namespace OpenCNCPilot.Communication
         public void Close()
         {
             _jogTimer?.Stop();
+            _watchdogTimer?.Stop();
 
             // Null-Check und Open-Check kombiniert
             if (_serialPort != null && _serialPort.IsOpen)
@@ -147,6 +159,15 @@ namespace OpenCNCPilot.Communication
 
         private void ParseInput(string data)
         {
+            // 1. Grund-Check: Wenn keine Daten da sind, gar nicht erst anfangen
+            if (string.IsNullOrWhiteSpace(data))
+                return;
+
+            // 2. Sicherheits-Check VOR dem Dispatcher:
+            // Wenn die App am Beenden ist oder die Maschine bereits weg ist, sofort abbrechen.
+            if (Application.Current == null || _machine == null)
+                return;
+            
             // Wir schieben die komplette Verarbeitung in den UI-Thread
             System.Windows.Application.Current.Dispatcher.BeginInvoke(new Action(() =>
             {
@@ -154,6 +175,9 @@ namespace OpenCNCPilot.Communication
                 {
                     var parts = data.Trim().Split(':');
                     if (parts.Length < 3 || parts[0] != "J") return;
+
+                    // WATCHDOG FÜTTERN: Wir haben gültige Daten empfangen!
+                    _lastJoystickDataTime = DateTime.Now;
 
                     for (int i = 1; i < parts.Length; i += 2)
                     {
@@ -311,6 +335,52 @@ namespace OpenCNCPilot.Communication
                     }
                 }
                 catch { break; }
+            }
+        }
+
+        private void OnWatchdogTimerTick(object sender, ElapsedEventArgs e)
+        {
+            // Hat der Arduino in den letzten 200ms Daten gesendet?
+            bool currentJoystickActive = (DateTime.Now - _lastJoystickDataTime).TotalMilliseconds <= 200;
+
+            // 1. Hardware-Sicherheitsabschaltung
+            if (!currentJoystickActive)
+            {
+                _joyX = 0.0;
+                _joyY = 0.0;
+                _joyZ = 0.0;
+
+                if (_isJogging)
+                {
+                    System.Windows.Application.Current.Dispatcher.BeginInvoke(new Action(() =>
+                    {
+                        if (_isJogging) StopJogging();
+                    }));
+                }
+            }
+
+            // 2. UI-Update (Völlig unabhängig von OCP-Fokus oder Jog-Freigaben!)
+            if (currentJoystickActive != _lastUiEnabled)
+            {
+                _lastUiEnabled = currentJoystickActive;
+
+                System.Windows.Application.Current.Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    OpenCNCPilot.MainWindow theRealMainWindow = null;
+                    foreach (System.Windows.Window window in System.Windows.Application.Current.Windows)
+                    {
+                        if (window is OpenCNCPilot.MainWindow)
+                        {
+                            theRealMainWindow = window as OpenCNCPilot.MainWindow;
+                            break;
+                        }
+                    }
+
+                    if (theRealMainWindow != null)
+                    {
+                        theRealMainWindow.UpdateJoystickVisuals(_lastUiEnabled);
+                    }
+                }));
             }
         }
     }

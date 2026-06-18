@@ -80,5 +80,10 @@ namespace OpenCNCPilot
         {
 			Util.GrblCodeTranslator.Reload();
         }
+
+        private void CheckBox_Checked(object sender, RoutedEventArgs e)
+        {
+
+        }
     }
 }

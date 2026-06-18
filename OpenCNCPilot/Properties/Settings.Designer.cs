@@ -874,5 +874,185 @@ namespace OpenCNCPilot.Properties {
                 this["GCodeRotation"] = value;
             }
         }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("False")]
+        public bool DKWExpanderOpen {
+            get {
+                return ((bool)(this["DKWExpanderOpen"]));
+            }
+            set {
+                this["DKWExpanderOpen"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("False")]
+        public bool ShowDKWModule {
+            get {
+                return ((bool)(this["ShowDKWModule"]));
+            }
+            set {
+                this["ShowDKWModule"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("1")]
+        public double DKWProbeDiameter {
+            get {
+                return ((double)(this["DKWProbeDiameter"]));
+            }
+            set {
+                this["DKWProbeDiameter"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("0.9")]
+        public double DKWMillDiameter {
+            get {
+                return ((double)(this["DKWMillDiameter"]));
+            }
+            set {
+                this["DKWMillDiameter"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("True")]
+        public bool ProbeSimulation {
+            get {
+                return ((bool)(this["ProbeSimulation"]));
+            }
+            set {
+                this["ProbeSimulation"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("0.5")]
+        public double DKWWallRemoval {
+            get {
+                return ((double)(this["DKWWallRemoval"]));
+            }
+            set {
+                this["DKWWallRemoval"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("0.2")]
+        public double DKWStepOverH {
+            get {
+                return ((double)(this["DKWStepOverH"]));
+            }
+            set {
+                this["DKWStepOverH"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("0.2")]
+        public double DKWStepDownV {
+            get {
+                return ((double)(this["DKWStepDownV"]));
+            }
+            set {
+                this["DKWStepDownV"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("False")]
+        public bool UseXInputGamePad {
+            get {
+                return ((bool)(this["UseXInputGamePad"]));
+            }
+            set {
+                this["UseXInputGamePad"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("False")]
+        public bool GamepadSwapSticks {
+            get {
+                return ((bool)(this["GamepadSwapSticks"]));
+            }
+            set {
+                this["GamepadSwapSticks"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("False")]
+        public bool GamepadSwapXY {
+            get {
+                return ((bool)(this["GamepadSwapXY"]));
+            }
+            set {
+                this["GamepadSwapXY"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("False")]
+        public bool GamepadInvertX {
+            get {
+                return ((bool)(this["GamepadInvertX"]));
+            }
+            set {
+                this["GamepadInvertX"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("False")]
+        public bool GamepadInvertY {
+            get {
+                return ((bool)(this["GamepadInvertY"]));
+            }
+            set {
+                this["GamepadInvertY"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("False")]
+        public bool GamepadInvertZ {
+            get {
+                return ((bool)(this["GamepadInvertZ"]));
+            }
+            set {
+                this["GamepadInvertZ"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("False")]
+        public bool GamepadZOnHorizontal {
+            get {
+                return ((bool)(this["GamepadZOnHorizontal"]));
+            }
+            set {
+                this["GamepadZOnHorizontal"] = value;
+            }
+        }
     }
 }
