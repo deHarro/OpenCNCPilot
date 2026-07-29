@@ -33,6 +33,13 @@ namespace OpenCNCPilot
 			// um sicherzugehen, dass keine alten Daten drin hängen!
 			OpenFileDialog localDialog = new OpenFileDialog() { Filter = "G-Code files (*.nc;*.gcode)|*.nc;*.gcode|All files (*.*)|*.*" };
 
+			// --- Den Pfad aus dem Haupt-G-Code-Dialog abgreifen ---
+			if (!string.IsNullOrEmpty(openFileDialogGCode.FileName))
+			{
+				// Wir ziehen nur den Ordnerpfad aus der Hauptdatei heraus
+				localDialog.InitialDirectory = System.IO.Path.GetDirectoryName(openFileDialogGCode.FileName);
+			}
+
 			if (localDialog.ShowDialog() == true)
 			{
 				try
