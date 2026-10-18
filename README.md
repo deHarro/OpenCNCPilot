@@ -25,7 +25,8 @@ Background: This feature is helpful when you have to adjust the machine to the d
 - Changed Tooltip for RO (rotate origin) button
 - Nailed the viewport orientation to the saved settings for RO ("rotate origin" in Debug box) and RotateCW ("rotate clockwise" in Edit box)
 - Replaced the original communication implementation to/from GRBL from event driven readline() to polling byte-by-byte to get rid of the problems, established by installing the up to date CH340 driver over Microsoft update mechanism (as of mid 2026).
-- added support for gamepad jogging.
+- Added support for gamepad jogging.
+- Changed camera view to orthogonal when "Inspection & Measurement" is started. Switch back to former view mode when leaving I&M.
 
 **Some of the new features are under construction still.<br>
 There may be errors and flaws, use at your own risk in productive environment!**
