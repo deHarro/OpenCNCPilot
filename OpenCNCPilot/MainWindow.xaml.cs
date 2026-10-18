@@ -31,6 +31,17 @@ namespace OpenCNCPilot
 
 		ObservableCollection<GCodeLayer> AllLayers = new ObservableCollection<GCodeLayer>();
 
+		// Statt Objektreferenz speichern wir die reinen Kameraparameter absolut fehlerfrei
+		private bool _hasSavedCamera = false;
+		private Point3D _savedPosition;
+		private Vector3D _savedLookDirection;
+		private Vector3D _savedUpDirection;
+		private bool _savedIsOrtho;
+		private double _savedOrthoWidth;
+		private double _savedPerspectiveFOV;
+
+		private Vector3D _cncUpDirection = new Vector3D(0, 1, 0); // Merkt sich dauerhaft die CNC-Ausrichtung
+
 		bool isViewFlat = false;            // wurde der Viewport flach auf X/Y-Ebene gelegt? (Button "Lay flat 3D Viewport" in der Debug-Box)
 
 		// Wir nutzen Visual3D als Basisklasse, da LinesVisual3D, QuadVisual3D und MeshElement3D alle davon erben.
@@ -594,6 +605,9 @@ namespace OpenCNCPilot
 
 			// Alles im Viewport aufräumen
 			ResetMeasurementUI();
+
+			// Ursprüngliche Kamera wiederherstellen
+			RestoreOriginalCamera();
 		}
 
 
@@ -627,6 +641,7 @@ namespace OpenCNCPilot
 				btn.ClearValue(Control.BackgroundProperty);
 				isViewFlat = false;
 				ResetMeasurementUI();
+				RestoreOriginalCamera(); // <--- Hier ergänzen
 			}
 		}
 
@@ -669,6 +684,7 @@ namespace OpenCNCPilot
 				btn.ClearValue(Control.BackgroundProperty);
 				isViewFlat = false;
 				ResetMeasurementUI();
+				RestoreOriginalCamera(); // <--- Hier ergänzen
 			}
 		}
 
@@ -1031,89 +1047,145 @@ namespace OpenCNCPilot
 
 		//----- ButtonLayFlatViewport ---------------------------------------------------
 		private void ButtonLayFlatViewport_Click(object sender, RoutedEventArgs e)
-        {
-           if (viewport == null || viewport.Camera == null) return;
+		{
+			if (viewport == null || viewport.Camera == null) return;
 
-            // --- ORIENTIERUNG BEIBEHALTEN ---
-            // Wir schauen, in welche Richtung die Kamera horizontal blickt (X und Y).
-            // Das ist die Richtung, die der User mit "ButtonRotateOrigin" eingestellt hat.
-            double targetUpX = viewport.Camera.LookDirection.X;
-            double targetUpY = viewport.Camera.LookDirection.Y;
+			// 1. Original-Kamera EINMALIG als Werte-Snapshot sichern (bevor wir sie verändern)
+			if (!_hasSavedCamera && viewport.Camera is ProjectionCamera projCam)
+			{
+				_savedPosition = projCam.Position;
+				_savedLookDirection = projCam.LookDirection;
+				_savedUpDirection = projCam.UpDirection;
+				_savedIsOrtho = projCam is OrthographicCamera;
 
-            // Falls wir schon flach schauen (X und Y fast 0), nehmen wir die aktuelle UpDirection,
-            // um die Drehung nicht zu verlieren.
-            if (Math.Abs(targetUpX) < 0.01 && Math.Abs(targetUpY) < 0.01)
-            {
-                targetUpX = viewport.Camera.UpDirection.X;
-                targetUpY = viewport.Camera.UpDirection.Y;
-            }
+				if (_savedIsOrtho && projCam is OrthographicCamera ortho)
+				{
+					_savedOrthoWidth = ortho.Width;
+				}
+				else if (!_savedIsOrtho && projCam is PerspectiveCamera pers)
+				{
+					_savedPerspectiveFOV = pers.FieldOfView;
+				}
+				_hasSavedCamera = true;
+			}
 
-            // Wir "frieren" diese Richtung für die Oben-Ausrichtung ein (Z auf 0)
-            // Falls beides 0 ist (Notfall-Fallback), nehmen wir Y als oben.
-            if (Math.Abs(targetUpX) < 0.01 && Math.Abs(targetUpY) < 0.01)
-            {
-                targetUpY = 1;
-            }
+			// --- ORIENTIERUNG BEIBEHALTEN ---
+			// Wir nehmen direkt den aktuellen Up-Vektor der Kamera. 
+			// Hier ist deine für die Fräse eingestellte Drehung (z.B. um 90°) sicher hinterlegt!
+			Vector3D currentUp = viewport.Camera.UpDirection;
+			// --- IMMER DIE FESTE CNC-AUSRICHTUNG NUTZEN ---
+			Vector3D upDir = _cncUpDirection; 
+			//Vector3D upDir = new Vector3D(currentUp.X, currentUp.Y, 0);
 
-            // 1. Blickrichtung & Oben-Ausrichtung (DYNAMISCH)
-            // Blick immer senkrecht runter (Z = -100)
-            viewport.Camera.LookDirection = new System.Windows.Media.Media3D.Vector3D(0, 0, -100);
-            // Oben ist jetzt das, was vorher "Vorne" war
-            viewport.Camera.UpDirection = new System.Windows.Media.Media3D.Vector3D(targetUpX, targetUpY, 0);
-            // 2. Bounding Box ohne "FindBounds" berechnen
-            var totalBounds = System.Windows.Media.Media3D.Rect3D.Empty;
+			if (upDir.Length > 0.001)
+			{
+				upDir.Normalize(); // Bringt den Vektor exakt auf Länge 1.0 -> behält die 90°-Drehung, verhindert aber jegliches Schrägstehen
+			}
+			else
+			{
+				upDir = new Vector3D(0, 1, 0); // Fallback, falls der Vektor kollabiert ist
+			}
 
-            foreach (var child in viewport.Children)
-            {
-                // Wir suchen gezielt nach den Linien des G-Codes
-                // In OCP sind das oft LinesVisual3D
-                if (child is HelixToolkit.Wpf.LinesVisual3D lines)
-                {
-                    // Wir ignorieren die Maschinengrenzen anhand ihrer Farbe oder ihres Namens
-                    // Die Maschinengrenzen sind in OCP oft Grau oder Weiß. 
-                    // Wenn die G-Code-Linien eine andere Farbe haben, können wir filtern:
-                    if (lines.Color == System.Windows.Media.Colors.LightGray) continue;
+			/*			// Wir schauen, in welche Richtung die Kamera horizontal blickt (X und Y).
+						// Das ist die Richtung, die der User mit "ButtonRotateOrigin" eingestellt hat.
+						double targetUpX = viewport.Camera.LookDirection.X;
+						double targetUpY = viewport.Camera.LookDirection.Y;
 
-                    // Falls das Objekt eine Content-Eigenschaft hat, nehmen wir deren Bounds
-                    var bounds = lines.Content.Bounds;
-                    if (!bounds.IsEmpty)
-                        totalBounds.Union(bounds);
-                }
-            }
+						// Falls wir schon flach schauen (X und Y fast 0), nehmen wir die aktuelle UpDirection,
+						// um die Drehung nicht zu verlieren.
+						if (Math.Abs(targetUpX) < 0.01 && Math.Abs(targetUpY) < 0.01)
+						{
+							targetUpX = viewport.Camera.UpDirection.X;
+							targetUpY = viewport.Camera.UpDirection.Y;
+						}
 
-            // 3. Zoom ausführen
-            if (!totalBounds.IsEmpty)
-            {
-                // Wir berechnen 15% Puffer
-                double margin = 0.15;
-                double offsetX = totalBounds.SizeX * margin;
-                double offsetY = totalBounds.SizeY * margin;
+						// Wir "frieren" diese Richtung für die Oben-Ausrichtung ein (Z auf 0)
+						// Falls beides 0 ist (Notfall-Fallback), nehmen wir Y als oben.
+						if (Math.Abs(targetUpX) < 0.01 && Math.Abs(targetUpY) < 0.01)
+						{
+							targetUpY = 1;
+						}
 
-                // Wir erstellen eine neue, größere Box basierend auf der alten
-                var paddedBounds = new System.Windows.Media.Media3D.Rect3D(
-                    totalBounds.X - offsetX / 2,
-                    totalBounds.Y - offsetY / 2,
-                    totalBounds.Z,
-                    totalBounds.SizeX + offsetX,
-                    totalBounds.SizeY + offsetY,
-                    totalBounds.SizeZ
-                );
+						// Sauber normalisieren, um jegliches Schrägstehen auf dem Monitor zu verhindern
+						Vector3D upDir = new Vector3D(targetUpX, targetUpY, 0);
+						if (upDir.Length > 0.001)
+							upDir.Normalize();
+						else
+							upDir = new Vector3D(0, 1, 0);
+			*/
 
-                // Jetzt zoomen wir auf die gepufferte Box
-                viewport.ZoomExtents(paddedBounds, 0);      // "0" verhindert das Hereingleiten von links oben
-            }
-            else
-            {
-                // Fallback: Wenn wir nichts spezifisches finden, nimm alles
-                viewport.ZoomExtents();
-            }
+			// 2. Bounding Box ohne "FindBounds" berechnen
+			var totalBounds = System.Windows.Media.Media3D.Rect3D.Empty;
 
-            isViewFlat = true;
-            TxtDistance.Foreground = System.Windows.Media.Brushes.DarkGreen;
-        }
+			foreach (var child in viewport.Children)
+			{
+				// Wir suchen gezielt nach den Linien des G-Codes
+				// In OCP sind das oft LinesVisual3D
+				if (child is HelixToolkit.Wpf.LinesVisual3D lines)
+				{
+					// Wir ignorieren die Maschinengrenzen anhand ihrer Farbe oder ihres Namens
+					// Die Maschinengrenzen sind in OCP oft Grau oder Weiß. 
+					// Wenn die G-Code-Linien eine andere Farbe haben, können wir filtern:
+					if (lines.Color == System.Windows.Media.Colors.LightGray) continue;
 
-        // Wird automatisch aufgerufen, sobald du die Kamera mit der Maus drehst/bewegst
-        private void viewport_CameraChanged(object sender, RoutedEventArgs e)
+					// Falls das Objekt eine Content-Eigenschaft hat, nehmen wir deren Bounds
+					var bounds = lines.Content.Bounds;
+					if (!bounds.IsEmpty)
+						totalBounds.Union(bounds);
+				}
+			}
+
+			// --- JETZT AUF ORTHOGONALE KAMERA UMSCHALTEN ---
+			double centerX = totalBounds.IsEmpty ? 0 : totalBounds.X + totalBounds.SizeX / 2.0;
+			double centerY = totalBounds.IsEmpty ? 0 : totalBounds.Y + totalBounds.SizeY / 2.0;
+			double maxDim = totalBounds.IsEmpty ? 100 : Math.Max(totalBounds.SizeX, totalBounds.SizeY);
+			if (maxDim <= 0) maxDim = 100;
+
+			var orthoCam = new OrthographicCamera
+			{
+				Position = new Point3D(centerX, centerY, maxDim + 200.0), // Weit genug oben auf Z
+				LookDirection = new Vector3D(0, 0, -1),                   // Exakt senkrecht nach unten
+				UpDirection = upDir,                                      // Perfekt waagerecht/senkrecht zum Monitor
+				Width = maxDim * 1.25                                     // Passt den Zoom perfekt an die Platine an
+			};
+
+			viewport.Camera = orthoCam;
+			isViewFlat = true;
+			TxtDistance.Foreground = System.Windows.Media.Brushes.DarkGreen;
+
+			// 3. Zoom ausführen
+			if (!totalBounds.IsEmpty)
+			{
+				// Wir berechnen 15% Puffer
+				double margin = 0.15;
+				double offsetX = totalBounds.SizeX * margin;
+				double offsetY = totalBounds.SizeY * margin;
+
+				// Wir erstellen eine neue, größere Box basierend auf der alten
+				var paddedBounds = new System.Windows.Media.Media3D.Rect3D(
+					totalBounds.X - offsetX / 2,
+					totalBounds.Y - offsetY / 2,
+					totalBounds.Z,
+					totalBounds.SizeX + offsetX,
+					totalBounds.SizeY + offsetY,
+					totalBounds.SizeZ
+				);
+
+				// Jetzt zoomen wir auf die gepufferte Box
+				viewport.ZoomExtents(paddedBounds, 0);      // "0" verhindert das Hereingleiten von links oben
+			}
+			else
+			{
+				// Fallback: Wenn wir nichts spezifisches finden, nimm alles
+				viewport.ZoomExtents();
+			}
+
+			isViewFlat = true;
+			TxtDistance.Foreground = System.Windows.Media.Brushes.DarkGreen;
+		}
+
+		// Wird automatisch aufgerufen, sobald du die Kamera mit der Maus drehst/bewegst
+		private void viewport_CameraChanged(object sender, RoutedEventArgs e)
 		{
 			if (TxtPickedCoords == null || viewport.Camera == null) return;
 
@@ -1158,6 +1230,9 @@ namespace OpenCNCPilot
 			else
 				newUp = new Vector3D(0, 1, 0); // Notfall-Fallback
 
+			// --- NEU: In unserer CNC-Variablen speichern ---
+			_cncUpDirection = newUp; 
+			
 			viewport.Camera.UpDirection = newUp;
 
 			// Wenn wir im Flach-Modus sind, Zoom neu berechnen
@@ -1182,6 +1257,7 @@ namespace OpenCNCPilot
 				if (cArray.Length >= 9)
 				{
 					viewport.Camera.UpDirection = new Vector3(cArray.Skip(6).Take(3).ToArray()).ToVector3D();
+					_cncUpDirection = viewport.Camera.UpDirection; // <--- Hier direkt für die CNC sichern				
 				}
 			}
 			catch
@@ -1902,6 +1978,37 @@ namespace OpenCNCPilot
 			{
 				// Joystick EIN -> Icon mit blauem Ring einblenden
 				JoystickOverlay.Visibility = Visibility.Visible;
+			}
+		}
+		private void RestoreOriginalCamera()
+		{
+			if (_hasSavedCamera && viewport != null)
+			{
+				ProjectionCamera restoredCam;
+
+				if (_savedIsOrtho)
+				{
+					restoredCam = new OrthographicCamera
+					{
+						Position = _savedPosition,
+						LookDirection = _savedLookDirection,
+						UpDirection = _savedUpDirection,
+						Width = _savedOrthoWidth
+					};
+				}
+				else
+				{
+					restoredCam = new PerspectiveCamera
+					{
+						Position = _savedPosition,
+						LookDirection = _savedLookDirection,
+						UpDirection = _savedUpDirection,
+						FieldOfView = _savedPerspectiveFOV > 0 ? _savedPerspectiveFOV : 45.0
+					};
+				}
+
+				viewport.Camera = restoredCam;
+				_hasSavedCamera = false; // Zurücksetzen für den nächsten Mess-Zyklus
 			}
 		}
 

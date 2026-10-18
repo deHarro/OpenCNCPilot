@@ -407,7 +407,7 @@
                                         <Hyperlink RequestNavigate="Hyperlink_RequestNavigate" NavigateUri="https://github.com/deHarro/OpenCNCPilot" TextDecorations="None">Mod: deHarro</Hyperlink>
                                     </TextBlock>
 
-                                    <TextBlock Text=" - v1.15, 2026-07-29" 
+                                    <TextBlock Text=" - v1.16, 2026-10-18" 
                                        Foreground="Gray" 
                                        FontSize="10" />
                                 </StackPanel>
@@ -432,6 +432,7 @@
                                                 <TextBlock Text="v1.13: Add 'Special Probing' for sideways probing and milling curved walls"/>
                                                 <TextBlock Text="v1.14: Implement GamePad-Jogging, get MaxFeeds from GRBL, add Visuals for Gamepad+Joystick"/>
                                                 <TextBlock Text="v1.15: Open add_layer dialog in the same directory as the initial g-code file"/>
+                                                <TextBlock Text="v1.16: 'Inspection + Measurement' and 'Lay Flat' change Camera to orthogonal View"/>
                                             </StackPanel>
                                         </TextBlock>
                                     </ToolTip>
